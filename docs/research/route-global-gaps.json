@@ -1,0 +1,1878 @@
+{
+  "schemaVersion": "route-global-gaps-v1",
+  "generatedAt": "2026-09-30T21:07:01.194Z",
+  "authority": "Notion",
+  "totals": {
+    "cities": 136,
+    "events": 59,
+    "regions": 7,
+    "countries": 68,
+    "sources": 64,
+    "eventCityRelations": 60
+  },
+  "regionDistribution": {
+    "América do Norte": 39,
+    "Europa": 34,
+    "Oceania": 7,
+    "Ásia": 26,
+    "África": 9,
+    "Oriente Médio": 2,
+    "América Latina": 19
+  },
+  "research": {
+    "cities": {
+      "NEEDS_RESEARCH": 103,
+      "COMPLETE": 33
+    },
+    "events": {
+      "PARTIAL": 30,
+      "COMPLETE": 8,
+      "UNVERIFIED": 21
+    }
+  },
+  "incomplete": {
+    "cities": [
+      {
+        "id": "city-route-3eb13e60f1968102a035eccd1b2ee64d",
+        "name": "Columbus",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Columbus Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968103bb1ae6b9a31c7291",
+        "name": "Sarajevo",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Sarajevo Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968104a270f229c3548078",
+        "name": "Novi Sad",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Serbia Fashion Week; confirmar sede principal por edição."
+      },
+      {
+        "id": "city-route-3eb13e60f1968105bb9ac671ec77c73a",
+        "name": "Sibiu",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Feeric Fashion Week; confirmar sede principal por edição."
+      },
+      {
+        "id": "city-route-3eb13e60f19681069362e766e40fc0a3",
+        "name": "Pittsburgh",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Pittsburgh Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196810b9132fe9210f5b6c7",
+        "name": "Manila",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Philippine Fashion Week / Manila Fashion Festival."
+      },
+      {
+        "id": "city-route-3eb13e60f196810b9463c0d280c809b5",
+        "name": "Palm Desert",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Fashion Week El Paseo; validar vínculo geográfico e edições 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f196810d91cbe172e61802dd",
+        "name": "Portland",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Portland Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196810f8c81e678c04298aa",
+        "name": "Singapore",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Singapore Fashion Week / Asia Fashion Exchange."
+      },
+      {
+        "id": "city-route-3eb13e60f196811282a0ce7f59f6010c",
+        "name": "St. Louis",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "St. Louis Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968113a2ecdadd253a3e0e",
+        "name": "Istanbul",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Mercedes-Benz Fashion Week Istanbul / Fashion Week Istanbul."
+      },
+      {
+        "id": "city-route-3eb13e60f1968113a3f5f271e1dc7090",
+        "name": "Ulaanbaatar",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Goyol Fashion Festival; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f1968117a8acc07b1300e721",
+        "name": "Las Vegas",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Las Vegas Fashion Week; validar atividade após 2010."
+      },
+      {
+        "id": "city-route-3eb13e60f196811981e2c285823d2cc7",
+        "name": "Phoenix",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Phoenix Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196811aa718c7551c9dfc9c",
+        "name": "Seattle",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Seattle Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196811f8ff7e37f75c5afc5",
+        "name": "Stockholm",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Stockholm Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681289c5eedb951772435",
+        "name": "Atlantic City",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Atlantic City Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681299d01f01728c89856",
+        "name": "Budapest",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f1968129a675d70164a0b3d4",
+        "name": "Riga",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f196812ab51cd97a3b8c0df0",
+        "name": "Zagreb",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Zagreb Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196812ab936d712e130d5cb",
+        "name": "Los Angeles",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f196812e83a6d08d0c8ac1f9",
+        "name": "Addis Ababa",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Hub of Africa Addis Fashion Week listado como radar de descoberta."
+      },
+      {
+        "id": "city-route-3eb13e60f196812eb0e8ff7993a84ac5",
+        "name": "Cali",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Cali Exposhow; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f196812f95fedbe313d4f9db",
+        "name": "Charleston",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Charleston Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968130b00efca0e5e0e1ad",
+        "name": "Minsk",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Belarus Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f196813ea3b9eb568aed5211",
+        "name": "Ciudad del Este",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Ciudad del Este Fashion Week aparece com início em 2010."
+      },
+      {
+        "id": "city-route-3eb13e60f1968142b199fda310ab1f1a",
+        "name": "Bucaramanga",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Santander Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f1968143ba91fdc54d93da4a",
+        "name": "Ottawa",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Ottawa Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968144a245dc10d7c80d4b",
+        "name": "Chicago",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Chicago Fashion Week / Midwest Fashion Week / bridal events."
+      },
+      {
+        "id": "city-route-3eb13e60f19681458161f682fcdc5929",
+        "name": "Kingston",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Caribbean/bridal fashion events; validar escopo e atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f1968145b85aff2c5a431977",
+        "name": "Colombo",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Colombo Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968147918adeaf5af52607",
+        "name": "Bengaluru",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Bangalore Fashion Week; Bengaluru é o nome oficial moderno da cidade."
+      },
+      {
+        "id": "city-route-3eb13e60f19681479f02d9419bb2f307",
+        "name": "Odesa",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Odessa Fashion Week; preservar grafia local Odesa e alias Odessa."
+      },
+      {
+        "id": "city-route-3eb13e60f1968149a1bcd8d919f91b0a",
+        "name": "Prague",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f196814ab283d095cdad6b43",
+        "name": "Fort Lauderdale",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "FTL MODA / resort fashion week."
+      },
+      {
+        "id": "city-route-3eb13e60f196814b94d3e1427b1d35e8",
+        "name": "Pedro Juan Caballero",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Frontera Fashion Weekend listado a partir de 2019."
+      },
+      {
+        "id": "city-route-3eb13e60f196814c97bce05f7a54dba4",
+        "name": "Detroit",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Detroit Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196814fb5b2d40c38d8629b",
+        "name": "Toronto",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Toronto Fashion Week histórico; pesquisar plataformas sucessoras/atuais como Fashion Art Toronto."
+      },
+      {
+        "id": "city-route-3eb13e60f196814fba53ed04c8869309",
+        "name": "Shenzhen",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f1968152adb7d7b2ad135ec7",
+        "name": "Atlanta",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Atlanta Fashion Week / Atlanta International Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968155af85d2dc0e9a537e",
+        "name": "Caracas",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Tolón Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f196815782ddeb4829b977fc",
+        "name": "Porto Alegre",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Donna Fashion Iguatemi; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681588394e052c11b3471",
+        "name": "Boston",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Boston Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968159adc1d0af28298aba",
+        "name": "Moscow",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Mercedes-Benz Fashion Week Russia / Russian Fashion Week; validar cronologia e status."
+      },
+      {
+        "id": "city-route-3eb13e60f196815b8fcbd9f5489fa766",
+        "name": "Goa",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "India Beach Fashion Week; tratar Goa como hub regional e confirmar cidade específica quando aplicável."
+      },
+      {
+        "id": "city-route-3eb13e60f196815bad73da55b933da7a",
+        "name": "Brisbane",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Mercedes-Benz Fashion Festival Brisbane."
+      },
+      {
+        "id": "city-route-3eb13e60f196815c9639e8be5556a9fd",
+        "name": "Islamabad",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Islamabad Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196815eaef7e85b2dbb7ed0",
+        "name": "Mexico City",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f196816080f0c2f52abae6e0",
+        "name": "Baltimore",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Baltimore Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196816294e9f0e287d8d4f2",
+        "name": "Montréal",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Montréal Fashion Week e Montréal Fashion & Design Festival."
+      },
+      {
+        "id": "city-route-3eb13e60f1968166b4b6ccf17c6d6bad",
+        "name": "Scottsdale",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Scottsdale Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196816c8ac0fb39090bccb1",
+        "name": "Athens",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f196816d96b4c2179b6c2857",
+        "name": "Kathmandu",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Nepal Fashion Week; confirmar cidade/sede por edição."
+      },
+      {
+        "id": "city-route-3eb13e60f196816f8fe5cae7f3f966ef",
+        "name": "Santiago",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Santiago Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681738a25fe1bebe5e807",
+        "name": "Mysuru",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Mysore Fashion Week; registrar alias Mysore."
+      },
+      {
+        "id": "city-route-3eb13e60f196817c895ac4d0e45cf98d",
+        "name": "Taipei",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f196817c90a7d1f138a9e95e",
+        "name": "Hong Kong",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f196817d9555f56b26a1c173",
+        "name": "Bogotá",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f1968182b8f7c2a744d30499",
+        "name": "Kuala Lumpur",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f196818aa0c2d712dcc7b5f9",
+        "name": "Dunedin",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "iD Dunedin Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968191a773d0c16133e98c",
+        "name": "Bellevue",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Bellevue Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f1968193a243db52b325d406",
+        "name": "Aspen",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Aspen Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681958393fb71ac9a1596",
+        "name": "Dhaka",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Dhaka Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968195926aeacec9022b28",
+        "name": "Belgrade",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Belgrade Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f1968196b78eeb9e77d880d1",
+        "name": "Washington, D.C.",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "DC Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681988a86e6850d1a9fd6",
+        "name": "Port Harcourt",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Port Harcourt International Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f196819da61eec6629163196",
+        "name": "Shanghai",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f19681a190cbef20e75a3ab6",
+        "name": "Liverpool",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Liverpool Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681a58853e3d8ab40ee24",
+        "name": "Christchurch",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Christchurch Fashion Festival / NZFW-linked historical listing."
+      },
+      {
+        "id": "city-route-3eb13e60f19681a6832dffe3ed2614dc",
+        "name": "Sacramento",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Sacramento Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681a7bf4dfddd1acb0bd1",
+        "name": "Tbilisi",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f19681aa84add1df83cce57c",
+        "name": "Delray Beach",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Delray Beach Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681ad8514e4c67be8a774",
+        "name": "Kansas City",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Kansas City Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681b181f8f8d3510068b2",
+        "name": "Kyiv",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f19681b3917ff84b2eb45a8a",
+        "name": "Nashville",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Nashville/Music City fashion events."
+      },
+      {
+        "id": "city-route-3eb13e60f19681b7841ffa8b5eedc6b8",
+        "name": "Barranquilla",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Barranquilla Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681be8a61cba4252bafd8",
+        "name": "Reykjavík",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Iceland Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681c09972fb3d9dc0e4bf",
+        "name": "Pune",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Pune Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681c2922ed31288608ba3",
+        "name": "Austin",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f19681c3a05dedf0786ad51f",
+        "name": "Lahore",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Lahore Fashion Week / Pakistan Fashion Week / PFDC Sunsilk Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681c6875ecbdfe0d61d98",
+        "name": "San Francisco",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "San Francisco Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681ccaf9bd83c48f7fe27",
+        "name": "Cleveland",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Fashion Week Cleveland."
+      },
+      {
+        "id": "city-route-3eb13e60f19681cfb148c20623bcdd57",
+        "name": "Karachi",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Karachi Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681d09300ccb0e2dedb1a",
+        "name": "Denver",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Colorado Fashion Week / Latin Fashion Week Colorado; confirmar cidade/sede por edição."
+      },
+      {
+        "id": "city-route-3eb13e60f19681d7b37cf42a78c15261",
+        "name": "Panama City",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f19681daba21f38daa341ad6",
+        "name": "Porto",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Portugal Fashion."
+      },
+      {
+        "id": "city-route-3eb13e60f19681df9b69eb49358709e3",
+        "name": "Philadelphia",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Philadelphia Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681e2a046efca2adb7cc4",
+        "name": "Rome",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Rome Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681e3bebccd16927ad0f4",
+        "name": "Minneapolis",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Fashion Week Minnesota; confirmar cidades/sedes por edição."
+      },
+      {
+        "id": "city-route-3eb13e60f19681e49a20d4113d7bba2f",
+        "name": "Bangkok",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f19681e5aef3ef99f3e83419",
+        "name": "Cape Town",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Cape Town Fashion Week; validar atividade dentro do recorte 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681e6a68dc49b154476cb",
+        "name": "Oxford",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Oxford Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681eab486d8a9da7982cc",
+        "name": "Manchester",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Manchester Fashion Week."
+      },
+      {
+        "id": "city-route-3eb13e60f19681edb689d1e8ea431f81",
+        "name": "Beijing",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "China Fashion Week; confirmar calendário e organizador oficial."
+      },
+      {
+        "id": "city-route-3eb13e60f19681efad87c56c63428e5c",
+        "name": "San José",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Costa Rica Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681f08a24cd83121e8531",
+        "name": "Indianapolis",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Midwest Fashion Week / Indianapolis."
+      },
+      {
+        "id": "city-route-3eb13e60f19681f09416d62a00a2c883",
+        "name": "Tashkent",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Tashkent Fashion Week; validar atividade no recorte 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681f4a63cd78f20a571bb",
+        "name": "Warsaw",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f19681f7b6ebe794c57d1624",
+        "name": "Asunción",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Asunción Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681f98ccff2be5cac7e90",
+        "name": "Suva",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Fiji Fashion Week; confirmar sede principal por edição."
+      },
+      {
+        "id": "city-route-3eb13e60f19681f9a127f2d46aa335a8",
+        "name": "Luanda",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Angola Fashion Week; validar atividade 2010+."
+      },
+      {
+        "id": "city-route-3eb13e60f19681fbb3ebf3ad4b973f82",
+        "name": "Lima",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "city-route-3eb13e60f19681ffa473dd31e81580b1",
+        "name": "Birmingham",
+        "researchStatus": "NEEDS_RESEARCH",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Birmingham Fashion Week."
+      }
+    ],
+    "events": [
+      {
+        "id": "event-route-3eb13e60f19681008beccc61e63385a5",
+        "name": "Vienna Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f196810a9632e20a40731091",
+        "name": "São Paulo Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f196811493b8f203f22ed924",
+        "name": "South African Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f196811abd3ce86d26ef1a9a",
+        "name": "Riyadh Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f196811c83d2c0633029163f",
+        "name": "Austin Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "event-route-3eb13e60f1968128a480cd0d282a0698",
+        "name": "Riga Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Registro-base; verificar site oficial vigente."
+      },
+      {
+        "id": "event-route-3eb13e60f1968135a785e74764ef93d9",
+        "name": "Mercedes-Benz Fashion Week México",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "event-route-3eb13e60f19681368beedbc13bfdfe8d",
+        "name": "Bogotá Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "event-route-3eb13e60f1968139a917f194c45ef240",
+        "name": "Kuala Lumpur Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "event-route-3eb13e60f196813d96c8c04edbc906d7",
+        "name": "Athens Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Nome provisório de catálogo; confirmar denominação oficial contemporânea e organizador."
+      },
+      {
+        "id": "event-route-3eb13e60f196813db455e20f65b9ba12",
+        "name": "Bangkok International Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "event-route-3eb13e60f196813eb5d7ec68ddfeaff5",
+        "name": "Prague Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Confirmar se a denominação oficial vigente é Mercedes-Benz Prague Fashion Week ou sucessora."
+      },
+      {
+        "id": "event-route-3eb13e60f19681418d59fe16be701af4",
+        "name": "Los Angeles Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Confirmar organizador/plataforma oficial vigente; existem iniciativas homônimas."
+      },
+      {
+        "id": "event-route-3eb13e60f196814b80e6c2feecef7d8f",
+        "name": "London Collections: Men / London Fashion Week Men's",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW",
+        "reason": "Preservar como evento histórico separado no arquivo 2010+, sem duplicar as temporadas menswear já integradas ao LFW contemporâneo."
+      },
+      {
+        "id": "event-route-3eb13e60f196814eba06e5cfa13887e9",
+        "name": "Shenzhen Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "event-route-3eb13e60f19681558c49fe9e8e7681dc",
+        "name": "Ukrainian Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Confirmar site e estrutura oficial vigente antes de ingestão automática."
+      },
+      {
+        "id": "event-route-3eb13e60f196815684fbfe19de721a00",
+        "name": "Dakar Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f1968158adccce28cd1be635",
+        "name": "Swahili Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f1968158b380f0cd25e300b3",
+        "name": "Lakmē Fashion Week x FDCI",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW",
+        "reason": "Cidade pode variar por edição; confirmar por temporada."
+      },
+      {
+        "id": "event-route-3eb13e60f1968159b1f4eb230acadb83",
+        "name": "Vancouver Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f196816c8959ecdba2ce1ab7",
+        "name": "Copenhagen Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f196816da740ec1cf60232f4",
+        "name": "Mercedes-Benz Fashion Week Madrid",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f1968179a8cce910cd346fca",
+        "name": "Jakarta Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f196817e9958fefbb2e11a74",
+        "name": "Warsaw Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Registro-base; confirmar evento oficial ativo e denominação contemporânea."
+      },
+      {
+        "id": "event-route-3eb13e60f19681829273df363935de0b",
+        "name": "Lagos Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681909663e5d21d6e681b",
+        "name": "Colombiamoda — Colombia Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681949ee3ea124e3af83e",
+        "name": "ModaLisboa — Lisboa Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681a0a759d0d38abbd604",
+        "name": "New Zealand Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681a5b7aae4347fc87146",
+        "name": "Indonesia Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Evento distinto de Jakarta Fashion Week; manter registros separados."
+      },
+      {
+        "id": "event-route-3eb13e60f19681ab9cfef139a94c14e6",
+        "name": "Seoul Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681ad883af6bfd4590342",
+        "name": "BAFWEEK — Buenos Aires Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681adadcdfa3d4f5c5e22",
+        "name": "Oslo Runway",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681b19b5ad0446e6e61e1",
+        "name": "Berlin Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681c1a607d0a64c04f2f4",
+        "name": "Lima Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "event-route-3eb13e60f19681c39315d68ca30fde53",
+        "name": "Tbilisi Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Registro-base; verificar site, organizador e atividade atual."
+      },
+      {
+        "id": "event-route-3eb13e60f19681c4a6cedb9b226c4ed8",
+        "name": "Hong Kong Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Distinguir Fashion Week de feiras comerciais HKTDC quando necessário."
+      },
+      {
+        "id": "event-route-3eb13e60f19681c7ab87c6d502ca4c1f",
+        "name": "Panama Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED"
+      },
+      {
+        "id": "event-route-3eb13e60f19681ca8924f53c971c18f9",
+        "name": "Miami Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681ca9707d13e47fa46d2",
+        "name": "Rio Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681cc82bddc8cdf2819ee",
+        "name": "Accra Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681d3a2cae7c7c1d12371",
+        "name": "Toronto Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW",
+        "reason": "Evento histórico de Toronto. A Cidade de Toronto registrou que a IMG cancelou o Toronto Fashion Week em julho de 2016. Preservar separado de Fashion Art Toronto."
+      },
+      {
+        "id": "event-route-3eb13e60f19681d48ecbe7a925f428b8",
+        "name": "Fashion Art Toronto",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW",
+        "reason": "Plataforma independente sem fins lucrativos fundada em 2005; em 2026 apresenta programação sazonal sob a marca Fashion Week: Toronto."
+      },
+      {
+        "id": "event-route-3eb13e60f19681de92dec3028d540fa7",
+        "name": "Budapest Central European Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Registro-base; verificar site oficial vigente."
+      },
+      {
+        "id": "event-route-3eb13e60f19681e09201e98e63f9e620",
+        "name": "AFC Australian Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681e19473f3a57a0c898a",
+        "name": "Shanghai Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Registro-base; verificar URL oficial e estrutura de temporadas."
+      },
+      {
+        "id": "event-route-3eb13e60f19681e199ade91e4099b237",
+        "name": "Taipei Fashion Week",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Registro-base; verificar URL oficial vigente."
+      },
+      {
+        "id": "event-route-3eb13e60f19681e49114fc68033ef8e9",
+        "name": "Amsterdam Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681e4a46fc92eebe4a611",
+        "name": "Fashion Week Brooklyn",
+        "researchStatus": "UNVERIFIED",
+        "importStatus": "REVIEW_REQUIRED",
+        "reason": "Hub New York, mas registro independente do NYFW oficial."
+      },
+      {
+        "id": "event-route-3eb13e60f19681e8953af504bd63d2be",
+        "name": "080 Barcelona Fashion",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681f2ab68e69f51f83448",
+        "name": "Melbourne Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW"
+      },
+      {
+        "id": "event-route-3eb13e60f19681f39eaada6a257623c9",
+        "name": "Dubai Fashion Week",
+        "researchStatus": "PARTIAL",
+        "importStatus": "NEW",
+        "reason": "Nome atual; substitui a antiga marca Arab Fashion Week no catálogo contemporâneo."
+      }
+    ]
+  },
+  "covers": {
+    "catalogedEntities": 195,
+    "matched": 35,
+    "fallback": 160,
+    "byStatus": {
+      "MISSING": 160,
+      "ALIAS_MATCH": 2,
+      "MATCHED": 33
+    },
+    "missing": [
+      {
+        "id": "city-route-3eb13e60f1968102a035eccd1b2ee64d",
+        "name": "Columbus",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968105bb9ac671ec77c73a",
+        "name": "Sibiu",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681069362e766e40fc0a3",
+        "name": "Pittsburgh",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968108b78af42f320e2b79",
+        "name": "Sydney",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196810b9132fe9210f5b6c7",
+        "name": "Manila",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196810b9463c0d280c809b5",
+        "name": "Palm Desert",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196810d84e2f0f7ad7a9bbd",
+        "name": "Dakar",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196810d91cbe172e61802dd",
+        "name": "Portland",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196810f8c81e678c04298aa",
+        "name": "Singapore",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196811282a0ce7f59f6010c",
+        "name": "St. Louis",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968113a3f5f271e1dc7090",
+        "name": "Ulaanbaatar",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681169429f3add6663ae6",
+        "name": "New Delhi",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968117a8acc07b1300e721",
+        "name": "Las Vegas",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196811981e2c285823d2cc7",
+        "name": "Phoenix",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196811aa718c7551c9dfc9c",
+        "name": "Seattle",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196811f8ff7e37f75c5afc5",
+        "name": "Stockholm",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196811fb606dd941faaa546",
+        "name": "Dubai",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196812080d5f304f6a18355",
+        "name": "Rio de Janeiro",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681289c5eedb951772435",
+        "name": "Atlantic City",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196812ab51cd97a3b8c0df0",
+        "name": "Zagreb",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196812ab936d712e130d5cb",
+        "name": "Los Angeles",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196812e83a6d08d0c8ac1f9",
+        "name": "Addis Ababa",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196812eb0e8ff7993a84ac5",
+        "name": "Cali",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196812f95fedbe313d4f9db",
+        "name": "Charleston",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196813ea3b9eb568aed5211",
+        "name": "Ciudad del Este",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968142b199fda310ab1f1a",
+        "name": "Bucaramanga",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968143ba91fdc54d93da4a",
+        "name": "Ottawa",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968144a245dc10d7c80d4b",
+        "name": "Chicago",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681458161f682fcdc5929",
+        "name": "Kingston",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968145b85aff2c5a431977",
+        "name": "Colombo",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196814781b8c80947361a08",
+        "name": "Medellín",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968147918adeaf5af52607",
+        "name": "Bengaluru",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196814ab283d095cdad6b43",
+        "name": "Fort Lauderdale",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196814b94d3e1427b1d35e8",
+        "name": "Pedro Juan Caballero",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196814c97bce05f7a54dba4",
+        "name": "Detroit",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196814fb5b2d40c38d8629b",
+        "name": "Toronto",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196814fba53ed04c8869309",
+        "name": "Shenzhen",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968152adb7d7b2ad135ec7",
+        "name": "Atlanta",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968152b214ee78186eda67",
+        "name": "São Paulo",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968155af85d2dc0e9a537e",
+        "name": "Caracas",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196815782ddeb4829b977fc",
+        "name": "Porto Alegre",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681588394e052c11b3471",
+        "name": "Boston",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681598147ec2a99912439",
+        "name": "Accra",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196815a87dce876bfcadf7f",
+        "name": "Seoul",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196815b8fcbd9f5489fa766",
+        "name": "Goa",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196815bad73da55b933da7a",
+        "name": "Brisbane",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196815c9639e8be5556a9fd",
+        "name": "Islamabad",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196815eaef7e85b2dbb7ed0",
+        "name": "Mexico City",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196816080f0c2f52abae6e0",
+        "name": "Baltimore",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196816294e9f0e287d8d4f2",
+        "name": "Montréal",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968166b4b6ccf17c6d6bad",
+        "name": "Scottsdale",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681678fe4e011d72ad682",
+        "name": "Auckland",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196816b8266f291b090d27c",
+        "name": "Lagos",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196816d96b4c2179b6c2857",
+        "name": "Kathmandu",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196816f8fe5cae7f3f966ef",
+        "name": "Santiago",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681738a25fe1bebe5e807",
+        "name": "Mysuru",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196817c895ac4d0e45cf98d",
+        "name": "Taipei",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196817c90a7d1f138a9e95e",
+        "name": "Hong Kong",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196817d9555f56b26a1c173",
+        "name": "Bogotá",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968182b8f7c2a744d30499",
+        "name": "Kuala Lumpur",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196818aa0c2d712dcc7b5f9",
+        "name": "Dunedin",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968191a773d0c16133e98c",
+        "name": "Bellevue",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681939737e2592c6ba910",
+        "name": "Miami",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968193a243db52b325d406",
+        "name": "Aspen",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681949b33d467cea86606",
+        "name": "Vancouver",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681958393fb71ac9a1596",
+        "name": "Dhaka",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f1968196b78eeb9e77d880d1",
+        "name": "Washington, D.C.",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681988a86e6850d1a9fd6",
+        "name": "Port Harcourt",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f196819da61eec6629163196",
+        "name": "Shanghai",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681a08f01cdcd3f0ea9e8",
+        "name": "Riyadh",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681a58853e3d8ab40ee24",
+        "name": "Christchurch",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681a6832dffe3ed2614dc",
+        "name": "Sacramento",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681a7bf4dfddd1acb0bd1",
+        "name": "Tbilisi",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681aa84add1df83cce57c",
+        "name": "Delray Beach",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681ad8514e4c67be8a774",
+        "name": "Kansas City",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681aebe09d497df46279e",
+        "name": "Dar es Salaam",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681b3917ff84b2eb45a8a",
+        "name": "Nashville",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681b4b64ad7dccd611d21",
+        "name": "Melbourne",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681b7841ffa8b5eedc6b8",
+        "name": "Barranquilla",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681b7abddd480f1ebd581",
+        "name": "Mumbai",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681c09972fb3d9dc0e4bf",
+        "name": "Pune",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681c2922ed31288608ba3",
+        "name": "Austin",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681c3a05dedf0786ad51f",
+        "name": "Lahore",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681c6875ecbdfe0d61d98",
+        "name": "San Francisco",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681c8a429ce29c0caff0b",
+        "name": "Johannesburg",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681ccaf9bd83c48f7fe27",
+        "name": "Cleveland",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681cfb148c20623bcdd57",
+        "name": "Karachi",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681d09300ccb0e2dedb1a",
+        "name": "Denver",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681d7b37cf42a78c15261",
+        "name": "Panama City",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681dab6d2d0e08c4a1954",
+        "name": "Vienna",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681df813cd2981707614b",
+        "name": "Jakarta",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681df9b69eb49358709e3",
+        "name": "Philadelphia",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681e3bebccd16927ad0f4",
+        "name": "Minneapolis",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681e49a20d4113d7bba2f",
+        "name": "Bangkok",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681e5aef3ef99f3e83419",
+        "name": "Cape Town",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681edb689d1e8ea431f81",
+        "name": "Beijing",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681efad87c56c63428e5c",
+        "name": "San José",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681f08a24cd83121e8531",
+        "name": "Indianapolis",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681f09416d62a00a2c883",
+        "name": "Tashkent",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681f4a63cd78f20a571bb",
+        "name": "Warsaw",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681f7b6ebe794c57d1624",
+        "name": "Asunción",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681f98ccff2be5cac7e90",
+        "name": "Suva",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681f9a127f2d46aa335a8",
+        "name": "Luanda",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681fa998fcb3cbb1ff594",
+        "name": "Buenos Aires",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681fbb3ebf3ad4b973f82",
+        "name": "Lima",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "city-route-3eb13e60f19681ffa473dd31e81580b1",
+        "name": "Birmingham",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681008beccc61e63385a5",
+        "name": "Vienna Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196810a9632e20a40731091",
+        "name": "São Paulo Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196810b85fcf85a28a03bcf",
+        "name": "Milano Fashion Week Men's",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196811493b8f203f22ed924",
+        "name": "South African Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196811abd3ce86d26ef1a9a",
+        "name": "Riyadh Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196811c83d2c0633029163f",
+        "name": "Austin Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f1968128a480cd0d282a0698",
+        "name": "Riga Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f1968135a785e74764ef93d9",
+        "name": "Mercedes-Benz Fashion Week México",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681368beedbc13bfdfe8d",
+        "name": "Bogotá Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f1968139a917f194c45ef240",
+        "name": "Kuala Lumpur Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196813d96c8c04edbc906d7",
+        "name": "Athens Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196813db455e20f65b9ba12",
+        "name": "Bangkok International Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196813eb5d7ec68ddfeaff5",
+        "name": "Prague Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681418d59fe16be701af4",
+        "name": "Los Angeles Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196814b80e6c2feecef7d8f",
+        "name": "London Collections: Men / London Fashion Week Men's",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196814eba06e5cfa13887e9",
+        "name": "Shenzhen Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681558c49fe9e8e7681dc",
+        "name": "Ukrainian Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196815684fbfe19de721a00",
+        "name": "Dakar Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f1968158adccce28cd1be635",
+        "name": "Swahili Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f1968158b380f0cd25e300b3",
+        "name": "Lakmē Fashion Week x FDCI",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f1968159b1f4eb230acadb83",
+        "name": "Vancouver Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196816c8959ecdba2ce1ab7",
+        "name": "Copenhagen Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196816da740ec1cf60232f4",
+        "name": "Mercedes-Benz Fashion Week Madrid",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f1968179a8cce910cd346fca",
+        "name": "Jakarta Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196817b9fc7c2a8431f17c9",
+        "name": "Haute Couture Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f196817e9958fefbb2e11a74",
+        "name": "Warsaw Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681829273df363935de0b",
+        "name": "Lagos Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681909663e5d21d6e681b",
+        "name": "Colombiamoda — Colombia Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681949ee3ea124e3af83e",
+        "name": "ModaLisboa — Lisboa Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681a0a759d0d38abbd604",
+        "name": "New Zealand Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681a5b7aae4347fc87146",
+        "name": "Indonesia Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681ab9cfef139a94c14e6",
+        "name": "Seoul Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681ad883af6bfd4590342",
+        "name": "BAFWEEK — Buenos Aires Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681adadcdfa3d4f5c5e22",
+        "name": "Oslo Runway",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681b19b5ad0446e6e61e1",
+        "name": "Berlin Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681b782fcc41102c41345",
+        "name": "NYFW Bridal",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681c1a607d0a64c04f2f4",
+        "name": "Lima Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681c39315d68ca30fde53",
+        "name": "Tbilisi Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681c4a6cedb9b226c4ed8",
+        "name": "Hong Kong Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681c7ab87c6d502ca4c1f",
+        "name": "Panama Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681ca8924f53c971c18f9",
+        "name": "Miami Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681ca9707d13e47fa46d2",
+        "name": "Rio Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681cc82bddc8cdf2819ee",
+        "name": "Accra Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681d3a2cae7c7c1d12371",
+        "name": "Toronto Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681d48ecbe7a925f428b8",
+        "name": "Fashion Art Toronto",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681de92dec3028d540fa7",
+        "name": "Budapest Central European Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681e09201e98e63f9e620",
+        "name": "AFC Australian Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681e19473f3a57a0c898a",
+        "name": "Shanghai Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681e199ade91e4099b237",
+        "name": "Taipei Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681e49114fc68033ef8e9",
+        "name": "Amsterdam Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681e4a46fc92eebe4a611",
+        "name": "Fashion Week Brooklyn",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681e8953af504bd63d2be",
+        "name": "080 Barcelona Fashion",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681f2ab68e69f51f83448",
+        "name": "Melbourne Fashion Week",
+        "coverStatus": "MISSING"
+      },
+      {
+        "id": "event-route-3eb13e60f19681f39eaada6a257623c9",
+        "name": "Dubai Fashion Week",
+        "coverStatus": "MISSING"
+      }
+    ]
+  },
+  "warnings": []
+}

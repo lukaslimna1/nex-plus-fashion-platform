@@ -18,7 +18,9 @@
     "db:migrate:remote": "wrangler d1 migrations apply nex-plus-fashion --remote",
     "cf:typegen": "wrangler types",
     "verify:infra": "tsx scripts/verify-infra.ts",
-    "verify:ai": "tsx scripts/verify-ai.ts"
+    "verify:ai": "tsx scripts/verify-ai.ts",
+    "import:route-global": "tsx scripts/import-route-global.ts",
+    "ingest:pfw:ss27": "tsx scripts/generate-pfw-ss27-seed.ts"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

@@ -12,38 +12,76 @@ export type SourceType =
   | "MUSEUM_ARCHIVE"
   | "ACADEMIC"
   | "VOCABULARY"
+  | "SOCIAL_NETWORK"
   | "OTHER";
 export type AccessMode = "PUBLIC" | "LOGIN_REQUIRED" | "PAYWALL" | "API" | "EMBED" | "UNKNOWN";
 export type RightsStatus = "CLEARED" | "RESTRICTED" | "UNKNOWN" | "NOT_APPLICABLE";
 export type DownloadPolicy = "DOWNLOAD_ALLOWED" | "DOWNLOAD_BLOCKED" | "DOWNLOAD_UNKNOWN";
 export type DisplayMode = "INLINE" | "EMBED" | "LINK_ONLY" | "THUMBNAIL_ONLY" | "PLACEHOLDER";
 export type AssetKind = "IMAGE" | "VIDEO";
-export type CoverageType = "RUNWAY" | "BACKSTAGE" | "DETAILS" | "EDITORIAL" | "PRESENTATION" | "EXTRAS" | "UNKNOWN";
+export type CoverageType = "RUNWAY" | "BACKSTAGE" | "DETAILS" | "BEAUTY" | "FRONT_ROW" | "ARRIVALS" | "EDITORIAL" | "CAMPAIGN" | "ATMOSPHERE" | "VENUE" | "PRESENTATION" | "EXTRAS" | "UNKNOWN";
 export type AssetCoverageScope = "LOOKBOOK_IMAGE" | "RUNWAY_COVERAGE_REEL" | "FULL_COLLECTION" | "DETAIL" | "EDITORIAL" | "UNKNOWN";
 export type VideoType = "FULL_SHOW" | "OFFICIAL_FILM" | "LIVESTREAM_REPLAY" | "RUNWAY_COVERAGE" | "BACKSTAGE" | "INTERVIEW" | "BEHIND_THE_SCENES" | "HIGHLIGHTS" | "REEL_SHORT" | "PRESS_VIDEO" | "OTHER_VERIFIED";
 export type VideoCompleteness = "FULL" | "PARTIAL" | "UNKNOWN";
 export type VideoOfficiality = "OFFICIAL" | "PARTNER_VERIFIED" | "PROFESSIONAL_VERIFIED" | "UNKNOWN";
+export type MediaProvider = "youtube" | "instagram" | "vimeo" | "tiktok" | "facebook" | "dailymotion" | "weibo" | "website" | "direct" | "other";
+export type VideoOrientation = "LANDSCAPE" | "PORTRAIT" | "SQUARE" | "UNKNOWN";
+export type PlaybackMode = "YOUTUBE_EMBED" | "INSTAGRAM_EMBED" | "VIMEO_EMBED" | "TIKTOK_EMBED" | "FACEBOOK_EMBED" | "WEBSITE_EMBED" | "HTML5_VIDEO" | "EXTERNAL_LINK";
+export type VideoAvailabilityStatus = "AVAILABLE" | "REGION_RESTRICTED" | "REMOVED" | "UNKNOWN";
+export type MediaStatus = "COMPLETE" | "PARTIAL" | "NEEDS_RESEARCH" | "NO_MEDIA_FOUND";
+export interface CollectionMediaStatus {
+  status: MediaStatus;
+  runwayImages: number;
+  backstageImages: number;
+  detailImages: number;
+  fullShowVideo: boolean;
+  otherVideos: number;
+  officialSource: boolean;
+  editorialSources: number;
+}
 export type CanonicalStatus = "DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED" | "CANONICAL";
 export type AIOutputStatus = "AI_DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED";
 export type ScheduleVerificationStatus = "VERIFIED" | "UNVERIFIED" | "CANCELLED" | "UNKNOWN";
 export type ScheduleState = "UPCOMING" | "SOON" | "NOW" | "ENDED" | "UNKNOWN";
+export type ResearchCompleteness = "COMPLETE" | "PARTIAL" | "NEEDS_RESEARCH" | "UNVERIFIED";
+export type ImportStatus = "NEW" | "UPDATED" | "UNCHANGED" | "REVIEW_REQUIRED";
+export type CoverMatchStatus = "MATCHED" | "ALIAS_MATCH" | "UNMATCHED" | "AMBIGUOUS" | "MISSING";
+
+export interface CoverReference {
+  assetKey: string;
+  url?: string;
+  status: CoverMatchStatus;
+  fallback: boolean;
+}
 
 export interface Region {
   id: Id; name: string; slug: string;
 }
 export interface Country {
-  id: Id; regionId: Id; name: string; isoCode: string; slug: string;
+  id: Id; regionId: Id; name: string; isoCode?: string; slug: string;
 }
 export interface AdministrativeArea {
   id: Id; countryId: Id; name: string; slug: string;
 }
 export interface CityHub {
   id: Id; name: string; slug: string; countryId: Id; regionId: Id;
-  administrativeAreaId?: Id; timezone: string; latitude?: number; longitude?: number;
+  administrativeAreaId?: Id; timezone?: string; latitude?: number; longitude?: number;
+  countryName?: string; countryCode?: string; regionName?: string; subregion?: string;
+  aliases: string[]; relatedEventIds: Id[]; researchStatus?: ResearchCompleteness;
+  hubImportance?: string; primarySourceId?: Id; complementarySourceIds: Id[]; notes?: string;
+  cover?: CoverReference; notionPageId?: string; notionUrl?: string; notionLastEditedAt?: ISODateTime;
+  sourceHash?: string; lastImportedAt?: ISODateTime; importStatus?: ImportStatus;
 }
 export interface Event {
   id: Id; name: string; slug: string; kind: "FASHION_WEEK" | "HAUTE_COUTURE_WEEK" | "OTHER";
   officialUrl?: string;
+  eventType?: string; aliases: string[]; cityHubIds: Id[]; currentStatus?: string;
+  knownStartYear?: number; knownEndYear?: number; activeSince2010?: boolean; organizer?: string;
+  usualPeriod?: string; lastVerifiedYear?: number; nextEditionAnnounced?: { start?: CivilDate; end?: CivilDate };
+  historicalRelation?: string; about?: string; historySummary?: string; verifiedSummaryAt?: CivilDate;
+  notes?: string; socials: Record<string, string>; primarySourceId?: Id; complementarySourceIds: Id[];
+  cover?: CoverReference; researchStatus?: ResearchCompleteness; notionPageId?: string; notionUrl?: string;
+  notionLastEditedAt?: ISODateTime; sourceHash?: string; lastImportedAt?: ISODateTime; importStatus?: ImportStatus;
 }
 export interface EventLocation {
   eventId: Id; cityHubId: Id; venueName?: string; address?: string; sourceId?: Id;
@@ -96,6 +134,18 @@ export interface Asset {
   verifiedAt?: ISODateTime; sequenceNumber?: number; lookNumber?: number;
   canonicalUrl?: string; channelName?: string; durationSeconds?: number; publishedAt?: ISODateTime;
   videoType?: VideoType; completeness?: VideoCompleteness; officiality?: VideoOfficiality;
+  width?: number; height?: number; aspectRatio?: string; orientation?: VideoOrientation; playbackMode?: PlaybackMode;
+  language?: string; availabilityStatus?: VideoAvailabilityStatus; uploaderName?: string; uploaderUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+export interface VideoAsset extends Omit<Asset, "assetKind" | "remoteUrl" | "embedUrl" | "provider" | "providerAssetId" | "playbackMode" | "orientation"> {
+  assetKind: "VIDEO";
+  remoteUrl?: string;
+  embedUrl?: string;
+  provider: MediaProvider;
+  providerAssetId?: string;
+  orientation: VideoOrientation;
+  playbackMode: PlaybackMode;
 }
 export interface AssetSource { assetId: Id; sourceId: Id; contribution: string; checkedAt: ISODateTime; }
 export interface ProfessionalReview {
@@ -145,6 +195,7 @@ export interface CollectionDetail {
   sources: Source[];
   reviews: ProfessionalReview[];
   tags: Tag[];
+  mediaStatus: CollectionMediaStatus;
 }
 export interface ImageGroup { sourceId: Id; coverageType: CoverageType; source?: Source; assets: Asset[]; }
 export interface MaisonDetail {
@@ -169,6 +220,14 @@ export interface HomeResponse {
   generatedAt: ISODateTime;
   revision: number;
 }
+export interface MediaResearchJob {
+  id: Id; collectionId: Id; sourceId: Id; mediaType: AssetKind; status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "BLOCKED";
+  lastAttemptAt?: ISODateTime; nextEligibleAttemptAt?: ISODateTime; resultCount: number; error?: string; metadata?: Record<string, unknown>;
+}
+export interface SourceAdapterCapabilities {
+  supportsImages: boolean; supportsVideo: boolean; supportsSchedule: boolean; supportsMetadata: boolean; supportsEmbed: boolean; supportsPagination: boolean;
+}
+export interface SourceAdapter { id: string; provider: MediaProvider | "fhcm" | "vogue-runway"; capabilities: SourceAdapterCapabilities; }
 export interface APIError { error: { code: string; message: string; }; }
 export interface HealthResponse {
   status: "ok" | "degraded"; environment: string; version: string; commit?: string;

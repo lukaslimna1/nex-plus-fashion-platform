@@ -1,4 +1,4 @@
-import type { Asset, CityHub, Collection, CollectionDetail, Country, CoverageType, Edition, Event, ImageGroup, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, Source, Tag, Term } from "@nex-plus/types";
+import type { Asset, CityHub, Collection, CollectionDetail, CollectionMediaStatus, Country, CoverageType, Edition, Event, ImageGroup, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, Source, Tag, Term } from "@nex-plus/types";
 
 export interface D1DatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
@@ -13,8 +13,8 @@ export interface D1PreparedStatementLike {
 export interface CatalogRepository {
   listRegions(): Promise<Region[]>;
   listCountries(): Promise<Country[]>;
-  listCities(): Promise<CityHub[]>;
-  listEvents(): Promise<Event[]>;
+  listCities(params?: CityFilters): Promise<CityHub[]>;
+  listEvents(params?: EventFilters): Promise<Event[]>;
   listEditions(): Promise<Edition[]>;
   listSchedule(params?: { from?: string; to?: string }): Promise<ScheduleEntry[]>;
   listMaisons(): Promise<Maison[]>;
@@ -35,12 +35,48 @@ export interface AssetFilters {
   coverageType?: CoverageType;
   mediaType?: Asset["assetKind"];
 }
+export interface CityFilters { region?: string; country?: string; status?: string; hasCover?: boolean; }
+export interface EventFilters { status?: string; type?: string; city?: string; hasCover?: boolean; }
 
 function asBoolean(value: unknown): boolean { return value === 1 || value === true; }
 function listIds(value: unknown): string[] { return typeof value === "string" && value ? value.split(",") : []; }
+function jsonArray(value: unknown): string[] {
+  if (typeof value !== "string" || !value) return [];
+  try { const parsed: unknown = JSON.parse(value); return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []; }
+  catch { return []; }
+}
+function jsonObject(value: unknown): Record<string, string> {
+  if (typeof value !== "string" || !value) return {};
+  try { const parsed: unknown = JSON.parse(value); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string")) : {}; }
+  catch { return {}; }
+}
+function jsonRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== "string" || !value) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch { return {}; }
+}
+function cover(value: Record<string, unknown>) {
+  if (typeof value.coverAssetKey !== "string" || !value.coverAssetKey) return undefined;
+  const status = typeof value.coverMatchStatus === "string" ? value.coverMatchStatus as "MATCHED" | "ALIAS_MATCH" | "UNMATCHED" | "AMBIGUOUS" | "MISSING" : "MISSING";
+  return { assetKey: value.coverAssetKey, ...(typeof value.coverUrl === "string" && value.coverUrl ? { url: value.coverUrl } : {}), status, fallback: asBoolean(value.coverFallback) };
+}
 type AssetRow = Omit<Asset, "sourceIds" | "alternativeUrls" | "attributionRequired" | "embedAllowed" | "remoteRenderAllowed" | "rehostAllowed"> & {
   sourceIds: string; alternativeUrls: string; attributionRequired: number; embedAllowed: number; remoteRenderAllowed: number; rehostAllowed: number;
 };
+
+function mediaStatusForAssets(assets: Asset[], sources: Source[]): CollectionMediaStatus {
+  const runwayImages = assets.filter((asset) => asset.assetKind === "IMAGE" && asset.coverageType === "RUNWAY").length;
+  const backstageImages = assets.filter((asset) => asset.assetKind === "IMAGE" && asset.coverageType === "BACKSTAGE").length;
+  const detailImages = assets.filter((asset) => asset.assetKind === "IMAGE" && asset.coverageType === "DETAILS").length;
+  const fullShowVideo = assets.some((asset) => asset.assetKind === "VIDEO" && (asset.videoType === "FULL_SHOW" || asset.completeness === "FULL"));
+  const otherVideos = assets.filter((asset) => asset.assetKind === "VIDEO" && !(asset.videoType === "FULL_SHOW" || asset.completeness === "FULL")).length;
+  const officialSource = sources.some((source) => source.authorityTier === "A");
+  const editorialSources = new Set(sources.filter((source) => source.authorityTier !== "A").map((source) => source.id)).size;
+  const status = assets.length === 0 ? "NO_MEDIA_FOUND" : runwayImages > 0 && fullShowVideo ? "COMPLETE" : "PARTIAL";
+  return { status, runwayImages, backstageImages, detailImages, fullShowVideo, otherVideos, officialSource, editorialSources };
+}
 
 export class D1CatalogRepository implements CatalogRepository {
   public constructor(private readonly db: D1DatabaseLike) {}
@@ -50,16 +86,51 @@ export class D1CatalogRepository implements CatalogRepository {
     return results;
   }
   async listCountries(): Promise<Country[]> {
-    const { results } = await this.db.prepare("SELECT id, region_id AS regionId, name, iso_code AS isoCode, slug FROM countries WHERE deleted_at IS NULL ORDER BY name").all<Country>();
-    return results;
+    const { results } = await this.db.prepare("SELECT id, region_id AS regionId, name, iso_code AS isoCode, slug FROM countries WHERE deleted_at IS NULL ORDER BY name").all<Omit<Country, "isoCode"> & { isoCode: string }>();
+    return results.map(({ isoCode, ...row }) => ({ ...row, ...(!isoCode.startsWith("NOTION_UNSET:") ? { isoCode } : {}) }));
   }
-  async listCities(): Promise<CityHub[]> {
-    const { results } = await this.db.prepare("SELECT id, name, slug, country_id AS countryId, region_id AS regionId, administrative_area_id AS administrativeAreaId, timezone, latitude, longitude FROM city_hubs WHERE deleted_at IS NULL ORDER BY name").all<CityHub>();
-    return results;
+  async listCities(params: CityFilters = {}): Promise<CityHub[]> {
+    const conditions = ["h.deleted_at IS NULL"];
+    const values: unknown[] = [];
+    if (params.region) { conditions.push("(r.id = ? OR r.slug = ? OR r.name = ?)"); values.push(params.region, params.region, params.region); }
+    if (params.country) { conditions.push("(c.id = ? OR c.slug = ? OR c.name = ? OR c.iso_code = ? OR h.country_code = ?)"); values.push(params.country, params.country, params.country, params.country, params.country); }
+    if (params.status) { conditions.push("(h.research_status = ? OR h.import_status = ?)"); values.push(params.status, params.status); }
+    if (params.hasCover !== undefined) { conditions.push("h.cover_fallback = ?"); values.push(params.hasCover ? 0 : 1); }
+    const query = `SELECT h.id, h.name, h.slug, h.country_id AS countryId, h.region_id AS regionId, h.administrative_area_id AS administrativeAreaId, CASE WHEN h.timezone = 'UNKNOWN' THEN NULL ELSE h.timezone END AS timezone, h.latitude, h.longitude, COALESCE(h.country_name, c.name) AS countryName, h.country_code AS countryCode, r.name AS regionName, h.subregion, h.aliases_json AS aliases, h.related_event_ids AS relatedEventIds, h.research_status AS researchStatus, h.hub_importance AS hubImportance, h.primary_source_id AS primarySourceId, h.complementary_source_ids AS complementarySourceIds, h.notes, h.cover_asset_key AS coverAssetKey, h.cover_url AS coverUrl, h.cover_match_status AS coverMatchStatus, h.cover_fallback AS coverFallback, h.notion_page_id AS notionPageId, h.notion_url AS notionUrl, h.notion_last_edited_at AS notionLastEditedAt, h.source_hash AS sourceHash, h.last_imported_at AS lastImportedAt, h.import_status AS importStatus FROM city_hubs h LEFT JOIN countries c ON c.id = h.country_id LEFT JOIN regions r ON r.id = h.region_id WHERE ${conditions.join(" AND ")} ORDER BY h.name`;
+    const { results } = await this.db.prepare(query).bind(...values).all<Record<string, unknown>>();
+    return results.map((row) => ({
+      id: String(row.id), name: String(row.name), slug: String(row.slug), countryId: String(row.countryId), regionId: String(row.regionId),
+      ...(typeof row.administrativeAreaId === "string" ? { administrativeAreaId: row.administrativeAreaId } : {}), ...(typeof row.timezone === "string" ? { timezone: row.timezone } : {}),
+      ...(typeof row.latitude === "number" ? { latitude: row.latitude } : {}), ...(typeof row.longitude === "number" ? { longitude: row.longitude } : {}),
+      ...(typeof row.countryName === "string" ? { countryName: row.countryName } : {}), ...(typeof row.countryCode === "string" ? { countryCode: row.countryCode } : {}),
+      ...(typeof row.regionName === "string" ? { regionName: row.regionName } : {}), ...(typeof row.subregion === "string" ? { subregion: row.subregion } : {}), aliases: jsonArray(row.aliases), relatedEventIds: listIds(row.relatedEventIds),
+      ...(typeof row.researchStatus === "string" ? { researchStatus: row.researchStatus as Exclude<CityHub["researchStatus"], undefined> } : {}), ...(typeof row.hubImportance === "string" ? { hubImportance: row.hubImportance } : {}),
+      ...(typeof row.primarySourceId === "string" ? { primarySourceId: row.primarySourceId } : {}), complementarySourceIds: listIds(row.complementarySourceIds), ...(typeof row.notes === "string" ? { notes: row.notes } : {}),
+      ...(cover(row) ? { cover: cover(row)! } : {}), ...(typeof row.notionPageId === "string" ? { notionPageId: row.notionPageId } : {}), ...(typeof row.notionUrl === "string" ? { notionUrl: row.notionUrl } : {}),
+      ...(typeof row.notionLastEditedAt === "string" ? { notionLastEditedAt: row.notionLastEditedAt } : {}), ...(typeof row.sourceHash === "string" ? { sourceHash: row.sourceHash } : {}), ...(typeof row.lastImportedAt === "string" ? { lastImportedAt: row.lastImportedAt } : {}),
+      ...(typeof row.importStatus === "string" ? { importStatus: row.importStatus as Exclude<CityHub["importStatus"], undefined> } : {})
+    }));
   }
-  async listEvents(): Promise<Event[]> {
-    const { results } = await this.db.prepare("SELECT id, name, slug, kind, official_url AS officialUrl FROM events WHERE deleted_at IS NULL ORDER BY name").all<Event>();
-    return results;
+  async listEvents(params: EventFilters = {}): Promise<Event[]> {
+    const conditions = ["e.deleted_at IS NULL"];
+    const values: unknown[] = [];
+    if (params.status) { conditions.push("(e.current_status = ? OR e.research_status = ? OR e.import_status = ?)"); values.push(params.status, params.status, params.status); }
+    if (params.type) { conditions.push("(e.event_type = ? OR e.kind = ?)"); values.push(params.type, params.type); }
+    if (params.city) { conditions.push("EXISTS (SELECT 1 FROM event_locations filter_location LEFT JOIN city_hubs filter_city ON filter_city.id = filter_location.city_hub_id WHERE filter_location.event_id = e.id AND (filter_city.id = ? OR filter_city.slug = ? OR filter_city.name = ?))"); values.push(params.city, params.city, params.city); }
+    if (params.hasCover !== undefined) { conditions.push("e.cover_fallback = ?"); values.push(params.hasCover ? 0 : 1); }
+    const query = `SELECT e.id, e.name, e.slug, e.kind, e.official_url AS officialUrl, e.event_type AS eventType, e.aliases_json AS aliases, e.city_hub_ids AS cityHubIds, e.current_status AS currentStatus, e.known_start_year AS knownStartYear, e.known_end_year AS knownEndYear, e.active_since_2010 AS activeSince2010, e.organizer, e.usual_period AS usualPeriod, e.last_verified_year AS lastVerifiedYear, e.next_edition_announced_json AS nextEditionAnnounced, e.historical_relation AS historicalRelation, e.about, e.history_summary AS historySummary, e.verified_summary_at AS verifiedSummaryAt, e.notes, e.socials_json AS socials, e.primary_source_id AS primarySourceId, e.complementary_source_ids AS complementarySourceIds, e.cover_asset_key AS coverAssetKey, e.cover_url AS coverUrl, e.cover_match_status AS coverMatchStatus, e.cover_fallback AS coverFallback, e.research_status AS researchStatus, e.notion_page_id AS notionPageId, e.notion_url AS notionUrl, e.notion_last_edited_at AS notionLastEditedAt, e.source_hash AS sourceHash, e.last_imported_at AS lastImportedAt, e.import_status AS importStatus FROM events e WHERE ${conditions.join(" AND ")} ORDER BY e.name`;
+    const { results } = await this.db.prepare(query).bind(...values).all<Record<string, unknown>>();
+    return results.map((row) => ({
+      id: String(row.id), name: String(row.name), slug: String(row.slug), kind: row.kind as Event["kind"], ...(typeof row.officialUrl === "string" ? { officialUrl: row.officialUrl } : {}),
+      ...(typeof row.eventType === "string" ? { eventType: row.eventType } : {}), aliases: jsonArray(row.aliases), cityHubIds: listIds(row.cityHubIds), ...(typeof row.currentStatus === "string" ? { currentStatus: row.currentStatus } : {}),
+      ...(typeof row.knownStartYear === "number" ? { knownStartYear: row.knownStartYear } : {}), ...(typeof row.knownEndYear === "number" ? { knownEndYear: row.knownEndYear } : {}), ...(row.activeSince2010 !== null && row.activeSince2010 !== undefined ? { activeSince2010: asBoolean(row.activeSince2010) } : {}),
+      ...(typeof row.organizer === "string" ? { organizer: row.organizer } : {}), ...(typeof row.usualPeriod === "string" ? { usualPeriod: row.usualPeriod } : {}), ...(typeof row.lastVerifiedYear === "number" ? { lastVerifiedYear: row.lastVerifiedYear } : {}),
+      ...(typeof row.nextEditionAnnounced === "string" && Object.keys(jsonObject(row.nextEditionAnnounced)).length > 0 ? { nextEditionAnnounced: jsonObject(row.nextEditionAnnounced) as Exclude<Event["nextEditionAnnounced"], undefined> } : {}), ...(typeof row.historicalRelation === "string" ? { historicalRelation: row.historicalRelation } : {}),
+      ...(typeof row.about === "string" ? { about: row.about } : {}), ...(typeof row.historySummary === "string" ? { historySummary: row.historySummary } : {}), ...(typeof row.verifiedSummaryAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.verifiedSummaryAt) ? { verifiedSummaryAt: row.verifiedSummaryAt as `${number}-${number}-${number}` } : {}), ...(typeof row.notes === "string" ? { notes: row.notes } : {}),
+      socials: jsonObject(row.socials), ...(typeof row.primarySourceId === "string" ? { primarySourceId: row.primarySourceId } : {}), complementarySourceIds: listIds(row.complementarySourceIds), ...(cover(row) ? { cover: cover(row)! } : {}),
+      ...(typeof row.researchStatus === "string" ? { researchStatus: row.researchStatus as Exclude<Event["researchStatus"], undefined> } : {}), ...(typeof row.notionPageId === "string" ? { notionPageId: row.notionPageId } : {}), ...(typeof row.notionUrl === "string" ? { notionUrl: row.notionUrl } : {}),
+      ...(typeof row.notionLastEditedAt === "string" ? { notionLastEditedAt: row.notionLastEditedAt } : {}), ...(typeof row.sourceHash === "string" ? { sourceHash: row.sourceHash } : {}), ...(typeof row.lastImportedAt === "string" ? { lastImportedAt: row.lastImportedAt } : {}), ...(typeof row.importStatus === "string" ? { importStatus: row.importStatus as Exclude<Event["importStatus"], undefined> } : {})
+    }));
   }
   async listEditions(): Promise<Edition[]> {
     const { results } = await this.db.prepare("SELECT id, event_id AS eventId, segment_id AS segmentId, city_hub_id AS cityHubId, calendar_year AS calendarYear, season_year AS seasonYear, season_code AS seasonCode, season_label AS seasonLabel, starts_on AS startsOn, ends_on AS endsOn, status FROM editions WHERE deleted_at IS NULL ORDER BY starts_on DESC").all<Edition>();
@@ -89,11 +160,21 @@ export class D1CatalogRepository implements CatalogRepository {
     if (params.source) { conditions.push("(',' || a.source_ids || ',') LIKE ?"); values.push(`%,${params.source},%`); }
     if (params.coverageType) { conditions.push("COALESCE(a.coverage_type_label, a.coverage_type) = ?"); values.push(params.coverageType); }
     if (params.mediaType) { conditions.push("a.asset_kind = ?"); values.push(params.mediaType); }
-    const query = `SELECT a.id, a.collection_id AS collectionId, a.title, a.source_page_url AS sourcePageUrl, a.remote_url AS remoteUrl, a.embed_url AS embedUrl, a.provider, a.provider_asset_id AS providerAssetId, a.thumbnail_url AS thumbnailUrl, a.alternative_urls AS alternativeUrls, a.creator, a.photographer, a.credit_line AS creditLine, a.source_ids AS sourceIds, a.rights_status AS rightsStatus, a.download_policy AS downloadPolicy, a.display_mode AS displayMode, a.local_path AS localPath, a.cache_url AS cacheUrl, a.canonical_status AS canonicalStatus, a.asset_kind AS assetKind, COALESCE(a.coverage_type_label, a.coverage_type) AS coverageType, a.coverage_scope AS coverageScope, a.copyright_holder AS copyrightHolder, a.license_name AS licenseName, a.license_url AS licenseUrl, a.attribution_required AS attributionRequired, a.embed_allowed AS embedAllowed, a.remote_render_allowed AS remoteRenderAllowed, a.rehost_allowed AS rehostAllowed, a.verified_at AS verifiedAt, a.sequence_number AS sequenceNumber, a.look_number AS lookNumber, a.canonical_url AS canonicalUrl, a.channel_name AS channelName, a.duration_seconds AS durationSeconds, a.published_at AS publishedAt, a.video_type AS videoType, a.completeness, a.officiality FROM assets a LEFT JOIN collections c ON c.id = a.collection_id WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(a.sequence_number, 999999), a.id`;
+    const query = `SELECT a.id, a.collection_id AS collectionId, a.title, a.source_page_url AS sourcePageUrl, a.remote_url AS remoteUrl, a.embed_url AS embedUrl, a.provider, a.provider_asset_id AS providerAssetId, a.thumbnail_url AS thumbnailUrl, a.alternative_urls AS alternativeUrls, a.creator, a.photographer, a.credit_line AS creditLine, a.source_ids AS sourceIds, a.rights_status AS rightsStatus, a.download_policy AS downloadPolicy, a.display_mode AS displayMode, a.local_path AS localPath, a.cache_url AS cacheUrl, a.canonical_status AS canonicalStatus, a.asset_kind AS assetKind, COALESCE(a.coverage_type_label, a.coverage_type) AS coverageType, a.coverage_scope AS coverageScope, a.copyright_holder AS copyrightHolder, a.license_name AS licenseName, a.license_url AS licenseUrl, a.attribution_required AS attributionRequired, a.embed_allowed AS embedAllowed, a.remote_render_allowed AS remoteRenderAllowed, a.rehost_allowed AS rehostAllowed, a.verified_at AS verifiedAt, a.sequence_number AS sequenceNumber, a.look_number AS lookNumber, a.canonical_url AS canonicalUrl, a.channel_name AS channelName, a.duration_seconds AS durationSeconds, a.published_at AS publishedAt, a.video_type AS videoType, a.completeness, a.officiality, a.width, a.height, a.aspect_ratio AS aspectRatio, a.orientation, a.playback_mode AS playbackMode, a.language, a.availability_status AS availabilityStatus, a.uploader_name AS uploaderName, a.uploader_url AS uploaderUrl, a.metadata_json AS metadata FROM assets a LEFT JOIN collections c ON c.id = a.collection_id WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(a.sequence_number, 999999), a.id`;
     const { results } = await this.db.prepare(query).bind(...values).all<AssetRow>();
     return results.map((row) => {
       const sourceIds = listIds(row.sourceIds);
-      return { ...row, sourceIds, ...(sourceIds[0] ? { sourceId: sourceIds[0] } : {}), alternativeUrls: listIds(row.alternativeUrls), attributionRequired: asBoolean(row.attributionRequired), embedAllowed: asBoolean(row.embedAllowed), remoteRenderAllowed: asBoolean(row.remoteRenderAllowed), rehostAllowed: asBoolean(row.rehostAllowed) };
+      return {
+        ...row,
+        sourceIds,
+        ...(sourceIds[0] ? { sourceId: sourceIds[0] } : {}),
+        alternativeUrls: listIds(row.alternativeUrls),
+        attributionRequired: asBoolean(row.attributionRequired),
+        embedAllowed: asBoolean(row.embedAllowed),
+        remoteRenderAllowed: asBoolean(row.remoteRenderAllowed),
+        rehostAllowed: asBoolean(row.rehostAllowed),
+        ...(Object.keys(jsonRecord(row.metadata)).length > 0 ? { metadata: jsonRecord(row.metadata) } : {})
+      };
     });
   }
   async getCollectionBySlug(slug: string): Promise<CollectionDetail | null> {
@@ -137,7 +218,8 @@ export class D1CatalogRepository implements CatalogRepository {
       videos: collectionAssets.filter((item) => item.assetKind === "VIDEO"),
       sources: collectionSources,
       reviews: reviews.filter((item) => item.collectionId === collection.id),
-      tags
+      tags,
+      mediaStatus: mediaStatusForAssets(collectionAssets, collectionSources)
     };
   }
   private async listTagsForCollection(collectionId: string): Promise<Tag[]> {
