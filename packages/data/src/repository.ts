@@ -1,4 +1,4 @@
-import type { Asset, CityHub, Collection, Country, Edition, Event, Maison, ProfessionalReview, Region, ScheduleEntry, Source, Tag, Term } from "@nex-plus/types";
+import type { Asset, CityHub, Collection, CollectionDetail, Country, Edition, Event, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, Source, Tag, Term } from "@nex-plus/types";
 
 export interface D1DatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
@@ -20,6 +20,8 @@ export interface CatalogRepository {
   listMaisons(): Promise<Maison[]>;
   listCollections(): Promise<Collection[]>;
   listAssets(): Promise<Asset[]>;
+  getCollectionBySlug(slug: string): Promise<CollectionDetail | null>;
+  getMaisonBySlug(slug: string): Promise<MaisonDetail | null>;
   listSources(): Promise<Source[]>;
   listReviews(): Promise<ProfessionalReview[]>;
   listTerms(): Promise<Term[]>;
@@ -29,6 +31,9 @@ export interface CatalogRepository {
 
 function asBoolean(value: unknown): boolean { return value === 1 || value === true; }
 function listIds(value: unknown): string[] { return typeof value === "string" && value ? value.split(",") : []; }
+type AssetRow = Omit<Asset, "sourceIds" | "alternativeUrls" | "attributionRequired" | "embedAllowed" | "remoteRenderAllowed" | "rehostAllowed"> & {
+  sourceIds: string; alternativeUrls: string; attributionRequired: number; embedAllowed: number; remoteRenderAllowed: number; rehostAllowed: number;
+};
 
 export class D1CatalogRepository implements CatalogRepository {
   public constructor(private readonly db: D1DatabaseLike) {}
@@ -64,15 +69,51 @@ export class D1CatalogRepository implements CatalogRepository {
   }
   async listMaisons(): Promise<Maison[]> {
     const { results } = await this.db.prepare("SELECT id, name, slug, website_url AS websiteUrl, founded_year AS foundedYear, artistic_direction AS artisticDirection, official_source_ids AS sourceIds FROM maisons WHERE deleted_at IS NULL ORDER BY name").all<Omit<Maison, "officialSourceIds"> & { sourceIds: string }>();
-    return results.map((row) => ({ ...row, officialSourceIds: listIds(row.sourceIds) }));
+    return results.map(({ sourceIds, ...row }) => ({ ...row, officialSourceIds: listIds(sourceIds) }));
   }
   async listCollections(): Promise<Collection[]> {
     const { results } = await this.db.prepare("SELECT id, maison_id AS maisonId, edition_id AS editionId, name, slug, calendar_year AS calendarYear, season_year AS seasonYear, season_code AS seasonCode, season_label AS seasonLabel, presented_on AS presentedOn, canonical_status AS canonicalStatus, source_ids AS sourceIds FROM collections WHERE deleted_at IS NULL ORDER BY presented_on DESC, name").all<Omit<Collection, "sourceIds"> & { sourceIds: string }>();
     return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds) }));
   }
   async listAssets(): Promise<Asset[]> {
-    const { results } = await this.db.prepare("SELECT id, collection_id AS collectionId, title, source_page_url AS sourcePageUrl, remote_url AS remoteUrl, embed_url AS embedUrl, provider, provider_asset_id AS providerAssetId, thumbnail_url AS thumbnailUrl, alternative_urls AS alternativeUrls, creator, photographer, credit_line AS creditLine, source_ids AS sourceIds, rights_status AS rightsStatus, download_policy AS downloadPolicy, display_mode AS displayMode, local_path AS localPath, cache_url AS cacheUrl, canonical_status AS canonicalStatus FROM assets WHERE deleted_at IS NULL ORDER BY id").all<Asset & { sourceIds: string; alternativeUrls: string }>();
-    return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds), alternativeUrls: listIds(row.alternativeUrls) }));
+    const { results } = await this.db.prepare("SELECT id, collection_id AS collectionId, title, source_page_url AS sourcePageUrl, remote_url AS remoteUrl, embed_url AS embedUrl, provider, provider_asset_id AS providerAssetId, thumbnail_url AS thumbnailUrl, alternative_urls AS alternativeUrls, creator, photographer, credit_line AS creditLine, source_ids AS sourceIds, rights_status AS rightsStatus, download_policy AS downloadPolicy, display_mode AS displayMode, local_path AS localPath, cache_url AS cacheUrl, canonical_status AS canonicalStatus, asset_kind AS assetKind, coverage_type AS coverageType, copyright_holder AS copyrightHolder, license_name AS licenseName, license_url AS licenseUrl, attribution_required AS attributionRequired, embed_allowed AS embedAllowed, remote_render_allowed AS remoteRenderAllowed, rehost_allowed AS rehostAllowed, verified_at AS verifiedAt FROM assets WHERE deleted_at IS NULL ORDER BY id").all<AssetRow>();
+    return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds), alternativeUrls: listIds(row.alternativeUrls), attributionRequired: asBoolean(row.attributionRequired), embedAllowed: asBoolean(row.embedAllowed), remoteRenderAllowed: asBoolean(row.remoteRenderAllowed), rehostAllowed: asBoolean(row.rehostAllowed) }));
+  }
+  async getCollectionBySlug(slug: string): Promise<CollectionDetail | null> {
+    const collection = (await this.listCollections()).find((item) => item.slug === slug);
+    if (!collection) return null;
+    const [maisons, editions, events, cities, schedule, assets, sources, reviews, tags] = await Promise.all([
+      this.listMaisons(), this.listEditions(), this.listEvents(), this.listCities(), this.listSchedule(), this.listAssets(), this.listSources(), this.listReviews(), this.listTagsForCollection(collection.id)
+    ]);
+    const maison = maisons.find((item) => item.id === collection.maisonId);
+    if (!maison) return null;
+    const edition = editions.find((item) => item.id === collection.editionId);
+    const event = edition ? events.find((item) => item.id === edition.eventId) : undefined;
+    const city = edition ? cities.find((item) => item.id === edition.cityHubId) : undefined;
+    return {
+      collection,
+      maison,
+      ...(edition ? { edition } : {}),
+      ...(event ? { event } : {}),
+      ...(city ? { city } : {}),
+      schedule: schedule.filter((item) => item.editionId === collection.editionId),
+      assets: assets.filter((item) => item.collectionId === collection.id),
+      sources: sources.filter((item) => collection.sourceIds.includes(item.id)),
+      reviews: reviews.filter((item) => item.collectionId === collection.id),
+      tags
+    };
+  }
+  private async listTagsForCollection(collectionId: string): Promise<Tag[]> {
+    const { results } = await this.db.prepare("SELECT t.id, t.value, t.slug, t.source_ids AS sourceIds FROM tags t INNER JOIN collection_tags ct ON ct.tag_id = t.id WHERE ct.collection_id = ? ORDER BY t.value").bind(collectionId).all<Omit<Tag, "sourceIds"> & { sourceIds: string }>();
+    return results.map(({ sourceIds, ...row }) => ({ ...row, sourceIds: listIds(sourceIds) }));
+  }
+  async getMaisonBySlug(slug: string): Promise<MaisonDetail | null> {
+    const maison = (await this.listMaisons()).find((item) => item.slug === slug);
+    if (!maison) return null;
+    const [collections, assets, sources] = await Promise.all([this.listCollections(), this.listAssets(), this.listSources()]);
+    const maisonCollections = collections.filter((item) => item.maisonId === maison.id);
+    const collectionIds = new Set(maisonCollections.map((item) => item.id));
+    return { maison, collections: maisonCollections, assets: assets.filter((item) => item.collectionId && collectionIds.has(item.collectionId)), sources: sources.filter((item) => maison.officialSourceIds.includes(item.id)) };
   }
   async listSources(): Promise<Source[]> {
     const { results } = await this.db.prepare("SELECT id, canonical_name AS canonicalName, type, base_url AS baseUrl, authority_tier AS authorityTier, language, coverage_scope AS coverageScope, region_id AS regionId, country_id AS countryId, access_mode AS accessMode, rights_notes AS rightsNotes, automation_notes AS automationNotes, last_verified_at AS lastVerifiedAt, active FROM sources WHERE deleted_at IS NULL ORDER BY canonical_name").all<Omit<Source, "language" | "coverageScope" | "active"> & { language: string; coverageScope: string; active: number }>();

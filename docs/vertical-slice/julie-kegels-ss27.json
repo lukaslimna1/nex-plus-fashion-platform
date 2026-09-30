@@ -1,6 +1,7 @@
 {
   "collection": {
     "id": "collection-julie-kegels-ss27-2026",
+    "slug": "julie-kegels-womenswear-spring-summer-2027",
     "name": "Julie Kegels — Womenswear Spring/Summer 2027",
     "maison": "Julie Kegels",
     "calendarYear": 2026,
@@ -26,19 +27,71 @@
       "type": "OFFICIAL_ORGANIZER",
       "authorityTier": "A",
       "urls": [
-        "https://www.fhcm.paris/en/paris-fashion-week",
         "https://www.fhcm.paris/en/paris-fashion-week/calendar",
-        "https://www.fhcm.paris/en/paris-fashion-week/collections",
+        "https://www.fhcm.paris/en/collection/julie-kegels-womenswear-springsummer-2027",
         "https://www.fhcm.paris/en/house/julie-kegels"
       ],
-      "contributions": ["event", "edition", "calendar", "maison", "collection"]
+      "contributions": ["event", "edition", "calendar", "maison", "collection", "image"]
+    },
+    {
+      "id": "source-vogue-runway",
+      "canonicalName": "Vogue Runway",
+      "type": "RUNWAY_COVERAGE",
+      "authorityTier": "B",
+      "urls": ["https://www.vogue.com/fashion-shows/spring-2027-ready-to-wear/julie-kegels/slideshow/collection"],
+      "contributions": ["photographer", "credit"]
+    },
+    {
+      "id": "source-nss",
+      "canonicalName": "nss magazine",
+      "type": "REVIEW_PUBLICATION",
+      "authorityTier": "B",
+      "urls": ["https://www.nssmag.com/en/fashion/47057/julie-kegels-runway-show-spring-summer-2027-paris-fashion-week"],
+      "contributions": ["runway coverage", "Instagram reel embed"]
     }
   ],
   "media": {
-    "assets": [],
-    "status": "PENDING_SOURCE_VERIFICATION",
-    "note": "The official FHCM pages verified for this slice expose the SS27 collection and schedule, but no directly reusable SS27 photo or official video/embed URL was verified during ingestion. No third-party media was copied or presented as owned content.",
-    "nextStep": "Re-check the official collection page or an explicitly credited coverage source before adding remoteUrl/embedUrl, rightsStatus, downloadPolicy, creator and creditLine."
+    "status": "MEDIA_READY_WITH_RIGHTS_GUARD",
+    "assets": [
+      {
+        "id": "asset-julie-kegels-ss27-look-01",
+        "assetKind": "IMAGE",
+        "coverageType": "RUNWAY",
+        "sourcePageUrl": "https://www.fhcm.paris/en/collection/julie-kegels-womenswear-springsummer-2027",
+        "remoteUrl": "https://www.fhcm.paris/sites/default/files/styles/lkt/public/lme/686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00038.jpg?itok=289PnrE8",
+        "alternativeUrls": ["https://www.fhcm.paris/sites/default/files/styles/lkt/public/lme/686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00051.jpg?itok=_ebopqbb"],
+        "thumbnailUrl": "https://www.fhcm.paris/sites/default/files/styles/lkt/public/lme/686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00038.jpg?itok=289PnrE8",
+        "provider": "FHCM",
+        "providerAssetId": "686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00038.jpg",
+        "photographer": "Filippo Fior",
+        "creditLine": "Filippo Fior / Gorunway.com; FHCM page credit: @Launchmetrics",
+        "rightsStatus": "UNKNOWN",
+        "downloadPolicy": "DOWNLOAD_BLOCKED",
+        "displayMode": "INLINE",
+        "rehostAllowed": false,
+        "canonicalStatus": "CANONICAL"
+      },
+      {
+        "id": "asset-julie-kegels-ss27-reel",
+        "assetKind": "VIDEO",
+        "coverageType": "RUNWAY",
+        "sourcePageUrl": "https://www.nssmag.com/en/fashion/47057/julie-kegels-runway-show-spring-summer-2027-paris-fashion-week",
+        "embedUrl": "https://www.instagram.com/reel/Dd1bejCMjsx/embed/",
+        "thumbnailUrl": "https://www.fhcm.paris/sites/default/files/styles/lkt/public/lme/686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00038.jpg?itok=289PnrE8",
+        "provider": "Instagram",
+        "providerAssetId": "Dd1bejCMjsx",
+        "creator": "nssfrance",
+        "creditLine": "Video published by @nssfrance; Instagram-hosted reel",
+        "rightsStatus": "UNKNOWN",
+        "downloadPolicy": "DOWNLOAD_BLOCKED",
+        "displayMode": "EMBED",
+        "embedAllowed": true,
+        "rehostAllowed": false,
+        "canonicalStatus": "CANONICAL"
+      }
+    ],
+    "fallbackOrder": ["remoteUrl", "alternativeUrls", "embedUrl", "thumbnailUrl", "placeholder"],
+    "note": "The slice stores URLs and provenance only. It does not download or rehost third-party media. Unknown rights keep download blocked; the frontend must preserve attribution and source-page access."
   },
   "pipeline": ["SOURCE_REAL", "SCRAPER", "NORMALIZATION", "VALIDATION", "DATABASE", "API", "JSON_FINAL"]
 }
