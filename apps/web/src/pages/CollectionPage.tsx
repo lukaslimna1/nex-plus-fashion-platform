@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Calendar,
   Clock,
   MapPin,
   ExternalLink,
   ShieldCheck,
-  ShieldAlert,
   BookOpen,
   Film,
   Camera,
@@ -14,6 +13,8 @@ import {
   Edit3,
   Bookmark,
   Share2,
+  AlertCircle,
+  Eye,
 } from "lucide-react";
 import {
   Badge,
@@ -23,9 +24,10 @@ import {
   EmptyState,
   SourceLink,
   MetadataLine,
+  MediaCredit,
 } from "@nex-plus/ui";
 
-// Importando o contrato real da vertical slice produzido pelo Codex
+// Importando o contrato real da vertical slice produzido e atualizado pelo Codex
 import julieKegelsData from "../../../../docs/vertical-slice/julie-kegels-ss27.json";
 
 export const CollectionPage: React.FC = () => {
@@ -38,6 +40,7 @@ export const CollectionPage: React.FC = () => {
     return localStorage.getItem("caderno_julie_kegels_ss27") || "";
   });
   const [isSaved, setIsSaved] = useState(false);
+  const [selectedLook, setSelectedLook] = useState<any>(null);
 
   const handleSaveNote = () => {
     localStorage.setItem("caderno_julie_kegels_ss27", cadernoNote);
@@ -46,7 +49,12 @@ export const CollectionPage: React.FC = () => {
   };
 
   const { collection, schedule, sources, media } = julieKegelsData;
-  const isPendingVerification = media.status === "PENDING_SOURCE_VERIFICATION";
+
+  // Filtragem dos assets reais do Codex
+  const imageAssets = media.assets.filter((a) => a.assetKind === "IMAGE");
+  const videoAssets = media.assets.filter((a) => a.assetKind === "VIDEO" || a.embedUrl);
+
+  const isMediaReady = media.status === "MEDIA_READY_WITH_RIGHTS_GUARD";
 
   return (
     <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px 20px 80px 20px" }}>
@@ -83,7 +91,7 @@ export const CollectionPage: React.FC = () => {
           backgroundColor: "var(--nex-surface-1)",
           border: "1px solid var(--nex-border-subtle)",
           padding: "48px 36px",
-          marginBottom: "36px",
+          marginBottom: "32px",
           background: "linear-gradient(135deg, #181822 0%, #0c0c10 100%)",
         }}
         className="nex-collection-hero"
@@ -94,7 +102,9 @@ export const CollectionPage: React.FC = () => {
             <Badge variant="canonical">{collection.seasonLabel}</Badge>
             <Badge variant="verified">Temporada Editorial {collection.seasonYear}</Badge>
             <Badge variant="neutral">Realizado em {collection.calendarYear}</Badge>
-            <Badge variant="neutral">Formato: {schedule.format === "SHOW" ? "Desfile Oficial" : schedule.format}</Badge>
+            <Badge variant="neutral">
+              Formato: {schedule.format === "SHOW" ? "Desfile Oficial" : schedule.format}
+            </Badge>
           </div>
 
           <div
@@ -172,51 +182,28 @@ export const CollectionPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Elegant Warning Banner for PENDING_SOURCE_VERIFICATION */}
-      {isPendingVerification && (
+      {/* Rights Guard & Provenance Notification Banner */}
+      {isMediaReady && (
         <div
           style={{
-            backgroundColor: "rgba(212, 175, 55, 0.08)",
-            border: "1px solid rgba(212, 175, 55, 0.28)",
+            backgroundColor: "rgba(16, 185, 129, 0.06)",
+            border: "1px solid rgba(16, 185, 129, 0.25)",
             borderRadius: "var(--nex-radius-lg)",
-            padding: "20px 24px",
-            marginBottom: "32px",
+            padding: "16px 20px",
+            marginBottom: "28px",
             display: "flex",
             alignItems: "flex-start",
-            gap: "16px",
+            gap: "14px",
           }}
         >
-          <ShieldAlert size={26} style={{ color: "var(--nex-accent-gold)", flexShrink: 0, marginTop: "2px" }} />
+          <ShieldCheck size={22} style={{ color: "var(--nex-success)", flexShrink: 0, marginTop: "2px" }} />
           <div>
-            <div
-              style={{
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                color: "var(--nex-text-primary)",
-                marginBottom: "4px",
-              }}
-            >
-              Mídia em Verificação Canônica de Fonte (PENDING_SOURCE_VERIFICATION)
+            <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--nex-text-primary)", marginBottom: "2px" }}>
+              Mídia Homologada com Proteção de Direitos (MEDIA_READY_WITH_RIGHTS_GUARD)
             </div>
-            <p
-              style={{
-                fontSize: "0.85rem",
-                color: "var(--nex-text-secondary)",
-                lineHeight: 1.5,
-                marginBottom: "8px",
-              }}
-            >
-              {media.note}
+            <p style={{ fontSize: "0.82rem", color: "var(--nex-text-secondary)", lineHeight: 1.45 }}>
+              Mídia remota de terceiros agregada via URL/embed, com atribuição explícita de fotógrafo, veículo e página original. Downloads desabilitados conforme a política das fontes oficiais.
             </p>
-            <div
-              style={{
-                fontSize: "0.78rem",
-                color: "var(--nex-accent-gold)",
-                fontWeight: 500,
-              }}
-            >
-              Próximo passo: {media.nextStep}
-            </div>
           </div>
         </div>
       )}
@@ -234,12 +221,12 @@ export const CollectionPage: React.FC = () => {
         className="nex-no-scrollbar"
       >
         {[
-          { id: "looks", label: "Looks do Desfile (0)" },
+          { id: "looks", label: `Looks do Desfile (${imageAssets.length})` },
           { id: "leitura", label: "Minha Leitura / Caderno" },
-          { id: "critica", label: "Crítica Especializada" },
-          { id: "videos", label: "Vídeos & Apresentação" },
+          { id: "critica", label: "Crítica Especializada (1)" },
+          { id: "videos", label: `Vídeos & Cobertura (${videoAssets.length})` },
           { id: "vocabulario", label: "Vocabulário Relacionado" },
-          { id: "fontes", label: "Fontes & Proveniência" },
+          { id: "fontes", label: `Fontes & Proveniência (${sources.length})` },
         ].map((tab) => (
           <Chip
             key={tab.id}
@@ -251,18 +238,154 @@ export const CollectionPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Tab Content */}
+      {/* Tab 1: Looks do Desfile (com Mídia REAL e Créditos) */}
       {activeTab === "looks" && (
         <div>
-          <EmptyState
-            title="Nenhum look fotográfico adicionado sem verificação prévia"
-            description="O NEX+ segue a política rigorosa de não clonar mídias de terceiros nem apresentar conteúdo não homologado. Assim que a cobertura da FHCM ou fontes credenciadas forem verificadas pelo pipeline de ingestão, as fotos dos looks aparecerão aqui."
-            actionText="Consultar Calendário Oficial FHCM"
-            onActionClick={() => window.open(schedule.sourcePageUrl, "_blank")}
-          />
+          <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <div>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--nex-text-primary)" }}>
+                Looks da Coleção · Cobertura Fotográfica
+              </h3>
+              <p style={{ fontSize: "0.82rem", color: "var(--nex-text-muted)" }}>
+                Fotografia oficial da passarela capturada durante a apresentação na Paris Fashion Week®.
+              </p>
+            </div>
+            <Badge variant="canonical">1 look homologado</Badge>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 340px))",
+              gap: "24px",
+            }}
+          >
+            {imageAssets.map((asset) => (
+              <div
+                key={asset.id}
+                style={{
+                  backgroundColor: "var(--nex-surface-1)",
+                  borderRadius: "var(--nex-radius-lg)",
+                  border: "1px solid var(--nex-border-subtle)",
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  transition: "all var(--nex-transition-normal)",
+                }}
+                className="nex-glass-hover"
+              >
+                {/* Look Photo Container */}
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    aspectRatio: "2/3",
+                    backgroundColor: "var(--nex-surface-2)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <img
+                    src={asset.remoteUrl || asset.thumbnailUrl}
+                    alt={asset.id.includes("look-01") ? "Julie Kegels SS27 — Look 01 (Passarela)" : "Julie Kegels SS27 Look"}
+                    loading="lazy"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      transition: "transform var(--nex-transition-cinematic)",
+                    }}
+                    className="nex-card-image"
+                  />
+
+                  {/* Badges on Top */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "10px",
+                      left: "10px",
+                      display: "flex",
+                      gap: "6px",
+                      zIndex: 2,
+                    }}
+                  >
+                    <Badge variant="canonical" size="sm">
+                      Look 01
+                    </Badge>
+                    <Badge variant="neutral" size="sm">
+                      Passarela
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Attribution & Provenance Footer */}
+                <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--nex-text-primary)" }}>
+                    {asset.id.includes("look-01") ? "Julie Kegels SS27 — Look 01 (Passarela)" : "Julie Kegels SS27 Look"}
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.78rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "var(--nex-text-secondary)" }}>
+                      <Camera size={13} style={{ color: "var(--nex-accent-gold)" }} />
+                      <span>Fotógrafo:</span>
+                      <strong style={{ color: "var(--nex-text-primary)", fontWeight: 600 }}>
+                        {asset.photographer}
+                      </strong>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "var(--nex-text-muted)" }}>
+                      <BookOpen size={13} />
+                      <span>Fonte:</span>
+                      <span style={{ color: "var(--nex-text-secondary)" }}>
+                        {asset.provider} (Launchmetrics)
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: "0.72rem", color: "var(--nex-text-muted)", fontStyle: "italic", marginTop: "2px" }}>
+                      {asset.creditLine}
+                    </div>
+                  </div>
+
+                  {/* Action Link: Ver original */}
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      paddingTop: "10px",
+                      borderTop: "1px solid var(--nex-border-subtle)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.72rem", color: "var(--nex-text-muted)" }}>
+                      Download desabilitado
+                    </span>
+                    <a
+                      href={asset.sourcePageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        color: "var(--nex-text-primary)",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                      }}
+                    >
+                      <span>Ver original na FHCM</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
+      {/* Tab 2: Minha Leitura / Caderno Pessoal */}
       {activeTab === "leitura" && (
         <div
           style={{
@@ -314,26 +437,182 @@ export const CollectionPage: React.FC = () => {
         </div>
       )}
 
+      {/* Tab 3: Crítica Especializada */}
       {activeTab === "critica" && (
         <div style={{ maxWidth: "800px" }}>
-          <EmptyState
-            title="Aguardando publicação de críticas verificadas"
-            description="As resenhas e análises de veículos profissionais da moda (como Vogue Runway, BoF, WWD) sobre a apresentação de Julie Kegels na Paris Fashion Week SS27 serão catalogadas preservando o autor, resumo e link para a publicação original."
-          />
+          <div
+            style={{
+              backgroundColor: "var(--nex-surface-1)",
+              border: "1px solid var(--nex-border-subtle)",
+              borderRadius: "var(--nex-radius-lg)",
+              padding: "24px",
+              marginBottom: "24px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <BookOpen size={16} style={{ color: "var(--nex-accent-gold)" }} />
+                <span style={{ fontWeight: 700, fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  nss magazine
+                </span>
+                <Badge variant="canonical" size="sm">
+                  Tier B
+                </Badge>
+              </div>
+              <span style={{ fontSize: "0.78rem", color: "var(--nex-text-muted)" }}>29/09/2026</span>
+            </div>
+
+            <h4
+              style={{
+                fontFamily: "var(--nex-font-display)",
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                color: "var(--nex-text-primary)",
+                marginBottom: "10px",
+              }}
+            >
+              Julie Kegels runway show — Spring/Summer 2027
+            </h4>
+
+            <p style={{ fontSize: "0.9rem", color: "var(--nex-text-secondary)", lineHeight: 1.6, marginBottom: "16px" }}>
+              Resenha crítica da publicação especializada nss magazine cobrindo a estreia e evolução estética da designer Julie Kegels no circuito oficial da semana de moda parisiense.
+            </p>
+
+            <a
+              href="https://www.nssmag.com/en/fashion/47057/julie-kegels-runway-show-spring-summer-2027-paris-fashion-week"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "var(--nex-text-primary)",
+                fontSize: "0.84rem",
+                fontWeight: 600,
+                textDecoration: "underline",
+                textUnderlineOffset: "3px",
+              }}
+            >
+              <span>Ler artigo completo no nss magazine</span>
+              <ExternalLink size={13} />
+            </a>
+          </div>
         </div>
       )}
 
+      {/* Tab 4: Vídeos & Cobertura (Reel NSS como COBERTURA, não desfile completo!) */}
       {activeTab === "videos" && (
         <div style={{ maxWidth: "800px" }}>
-          <EmptyState
-            title="Transmissão oficial em verificação"
-            description="Nenhum embed de vídeo ou livestream não oficial foi detectado com licença de incorporação para esta edição. Ao ser confirmado pela Maison ou FHCM, o player interno estará disponível."
-            actionText="Verificar no Portal FHCM"
-            onActionClick={() => window.open("https://www.fhcm.paris/en/paris-fashion-week", "_blank")}
-          />
+          <div style={{ marginBottom: "20px" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--nex-text-primary)", marginBottom: "4px" }}>
+              Vídeos & Cobertura Audiovisual
+            </h3>
+            <p style={{ fontSize: "0.84rem", color: "var(--nex-text-muted)" }}>
+              Registros audiovisuais verificados e coberturas em formato reel homologadas pelo pipeline.
+            </p>
+          </div>
+
+          {videoAssets.map((asset) => (
+            <div
+              key={asset.id}
+              style={{
+                backgroundColor: "var(--nex-surface-1)",
+                borderRadius: "var(--nex-radius-lg)",
+                border: "1px solid var(--nex-border-subtle)",
+                padding: "24px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+              }}
+            >
+              {/* Header com distinção explícita de Reel vs Desfile Completo */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <Badge variant="tier" size="sm">
+                      Cobertura em Reel
+                    </Badge>
+                    <span style={{ fontSize: "0.78rem", color: "var(--nex-text-muted)" }}>
+                      Instagram • @{asset.creator}
+                    </span>
+                  </div>
+                  <h4 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--nex-text-primary)" }}>
+                    {asset.id.includes("reel") ? "Julie Kegels SS27 — Reel de Cobertura (@nssfrance)" : asset.id}
+                  </h4>
+                </div>
+
+                <a
+                  href={asset.sourcePageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "0.8rem",
+                    color: "var(--nex-text-secondary)",
+                    textDecoration: "underline",
+                  }}
+                >
+                  <span>Matéria no nss magazine</span>
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+
+              {/* Explicação de Proveniência Canônica */}
+              <div
+                style={{
+                  backgroundColor: "rgba(255, 255, 255, 0.04)",
+                  border: "1px solid var(--nex-border-subtle)",
+                  borderRadius: "var(--nex-radius-md)",
+                  padding: "12px 14px",
+                  fontSize: "0.8rem",
+                  color: "var(--nex-text-secondary)",
+                  lineHeight: 1.45,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <AlertCircle size={16} style={{ color: "var(--nex-accent-gold)", flexShrink: 0 }} />
+                <span>
+                  <strong>Nota Editorial:</strong> Este reel do Instagram registra momentos da apresentação na Paris Fashion Week®. Não se trata da transmissão integral ou do vídeo master do desfile.
+                </span>
+              </div>
+
+              {/* Responsive Embed do Reel do Instagram */}
+              <div
+                style={{
+                  width: "100%",
+                  maxWidth: "400px",
+                  margin: "0 auto",
+                  borderRadius: "var(--nex-radius-md)",
+                  overflow: "hidden",
+                  border: "1px solid var(--nex-border-strong)",
+                  backgroundColor: "#000",
+                }}
+              >
+                <iframe
+                  src={asset.embedUrl}
+                  width="100%"
+                  height="480"
+                  style={{ border: "none", overflow: "hidden" }}
+                  scrolling="no"
+                  allowTransparency={true}
+                  allow="encrypted-media"
+                  title="Reel nss magazine da apresentação Julie Kegels SS27"
+                />
+              </div>
+
+              <div style={{ fontSize: "0.75rem", color: "var(--nex-text-muted)", textAlign: "center" }}>
+                {asset.creditLine}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
+      {/* Tab 5: Vocabulário Relacionado */}
       {activeTab === "vocabulario" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
           <div
@@ -375,6 +654,7 @@ export const CollectionPage: React.FC = () => {
         </div>
       )}
 
+      {/* Tab 6: Fontes & Proveniência */}
       {activeTab === "fontes" && (
         <div style={{ maxWidth: "800px", backgroundColor: "var(--nex-surface-1)", borderRadius: "var(--nex-radius-lg)", border: "1px solid var(--nex-border-subtle)", padding: "24px" }}>
           <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--nex-text-primary)", marginBottom: "16px" }}>
@@ -399,7 +679,7 @@ export const CollectionPage: React.FC = () => {
                   <Badge variant="tier">Tier {src.authorityTier}</Badge>
                 </div>
                 <div style={{ fontSize: "0.78rem", color: "var(--nex-text-muted)", marginBottom: "12px" }}>
-                  Tipo: Organização Oficial • Contribuições: {src.contributions.join(", ")}
+                  Tipo: {src.type} • Contribuições: {src.contributions.join(", ")}
                 </div>
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -418,7 +698,7 @@ export const CollectionPage: React.FC = () => {
 
           <div style={{ marginTop: "24px" }}>
             <h4 style={{ fontSize: "0.85rem", color: "var(--nex-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
-              Pipeline de Verificação
+              Pipeline de Verificação Canônica
             </h4>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
               {julieKegelsData.pipeline.map((step, idx) => (

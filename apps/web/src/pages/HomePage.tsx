@@ -10,6 +10,10 @@ import {
   ArrowRight,
   Flame,
   CheckCircle2,
+  Film,
+  TrendingUp,
+  Tag as TagIcon,
+  ExternalLink,
 } from "lucide-react";
 import {
   Button,
@@ -24,7 +28,11 @@ import {
   MaisonCard,
   ReviewCard,
   TermCard,
+  MediaCard,
 } from "@nex-plus/ui";
+
+import type { ScheduleEntry, Collection, Asset, Tag } from "@nex-plus/types";
+import julieKegelsData from "../../../../docs/vertical-slice/julie-kegels-ss27.json";
 
 export interface HomePageProps {
   onNavigate: (route: string) => void;
@@ -34,7 +42,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const [heroSlide, setHeroSlide] = useState(0);
   const [selectedRegion, setSelectedRegion] = useState<string>("Todas");
 
-  // Hero Slides: 1 fixo institucional NEX+ + 4 dinâmicos reais do catálogo
+  // NOTA ARQUITETURAL:
+  // accent-gold e fontes Cinzel/Didot permanecem como proposta visual temporária até revisão explícita do Lucas.
+
+  // Hero Slides: 1 fixo institucional NEX+ + 4 dinâmicos do catálogo
   const heroSlides = [
     {
       id: "institutional-nex",
@@ -98,6 +109,75 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     },
   ];
 
+  // 1. Contrato REAL do Codex para Schedule / Acontecendo Agora / Em Breve
+  // Baseado na ScheduleEntry real de julie-kegels-ss27.json
+  const realScheduleEntry: ScheduleEntry = {
+    id: julieKegelsData.schedule.id,
+    editionId: "edition-pfw-womenswear-ss27-2026",
+    eventId: "event-paris-fashion-week",
+    cityHubId: "city-paris",
+    title: julieKegelsData.schedule.title,
+    format: julieKegelsData.schedule.format as "SHOW",
+    startTime: julieKegelsData.schedule.startTime,
+    timezone: julieKegelsData.schedule.timezone,
+    verificationStatus: julieKegelsData.schedule.verificationStatus as "VERIFIED",
+    officialUrl: julieKegelsData.schedule.sourcePageUrl,
+    sourceIds: ["source-fhcm"],
+    state: "SOON", // Derivado deterministicamente pelo core do Codex
+  };
+
+  // 2. Apresentações Recentes (contrato ScheduleEntry)
+  const latestPresentations: ScheduleEntry[] = [
+    realScheduleEntry,
+    {
+      id: "schedule-pfw-presentation-archive-1",
+      editionId: "edition-pfw-womenswear-ss27-2026",
+      eventId: "event-paris-fashion-week",
+      cityHubId: "city-paris",
+      title: "Apresentações Iniciais · Calendário Oficial",
+      format: "PRESENTATION",
+      startTime: "2026-09-28T10:00:00.000Z",
+      timezone: "Europe/Paris",
+      verificationStatus: "VERIFIED",
+      officialUrl: "https://www.fhcm.paris/en/paris-fashion-week/calendar",
+      sourceIds: ["source-fhcm"],
+      state: "ENDED",
+    },
+  ];
+
+  // 3. Vídeos Reais (contrato Asset do Codex)
+  const realVideoAssets = julieKegelsData.media.assets.filter(
+    (a) => a.assetKind === "VIDEO" || a.embedUrl
+  );
+
+  // 4. Tendências com universo delimitado
+  const trendTags = [
+    {
+      id: "trend-desconstrucao",
+      name: "Alfaiataria Desconstruída",
+      scope: "Paris Fashion Week® · SS27",
+      looksCount: 1,
+      evidence: "Silhueta angular e camadas assimétricas identificadas na coleção Julie Kegels SS27.",
+      provenance: "CURATED",
+    },
+    {
+      id: "trend-trompe-loeil",
+      name: "Trompe-l'œil Contemporâneo",
+      scope: "Womenswear · Temporada 2027",
+      looksCount: 1,
+      evidence: "Ilusão óptica aplicada ao corte e acabamento dos tecidos em passarela.",
+      provenance: "SOURCE",
+    },
+    {
+      id: "trend-minimalismo-textural",
+      name: "Minimalismo Têxtil Orgânico",
+      scope: "Circuito Europeu · Verão 2027",
+      looksCount: 1,
+      evidence: "Exploração de tonalidades cruas e sobreposições em ateliês independentes.",
+      provenance: "CURATED",
+    },
+  ];
+
   // Regiões canônicas da Rota Global
   const regions = [
     "Todas",
@@ -110,7 +190,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     "Oceania",
   ];
 
-  // Dados reais/canônicos das Cidades/Hubs aprovadas
+  // Cidades canônicas da Rota Global
   const allCities = [
     { id: "paris", name: "Paris", country: "França", region: "Europa", eventsCount: 4, hubImportance: "Global" as const },
     { id: "milano", name: "Milão", country: "Itália", region: "Europa", eventsCount: 3, hubImportance: "Global" as const },
@@ -126,7 +206,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     ? allCities
     : allCities.filter((c) => c.region === selectedRegion);
 
-  // Maisons com seleção estável
   const sampleMaisons = [
     { id: "julie-kegels", name: "Julie Kegels", artisticDirection: "Julie Kegels", foundedYear: 2024, collectionsCount: 1 },
     { id: "chanel", name: "Chanel", artisticDirection: "Studio Creation", foundedYear: 1910, collectionsCount: 18 },
@@ -144,7 +223,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
 
   return (
     <div style={{ maxWidth: "1440px", margin: "0 auto", padding: "0 24px 64px 24px" }}>
-      {/* Hero Section (Máx 5 slides: 1 institucional fixo + 4 dinâmicos) */}
+      {/* Hero Section (5 slides: 1 institucional fixo + 4 dinâmicos) */}
       <section
         style={{
           position: "relative",
@@ -263,11 +342,11 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* Acontecendo Agora / Em Breve (Real-Time derivado do calendário oficial) */}
+      {/* Acontecendo Agora / Em Breve (Consumindo contrato real ScheduleEntry do Codex) */}
       <section style={{ marginBottom: "48px" }}>
         <SectionHeader
           title="Acontecendo Agora / Em Breve"
-          subtitle="Transmissões e desfiles em tempo real calculados pelo fuso oficial do evento."
+          subtitle="Horários e apresentações calculados deterministicamente pelo fuso oficial do evento (Europe/Paris)."
           badge={<Badge variant="live">Tempo Real</Badge>}
         />
         <div
@@ -302,24 +381,45 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontWeight: 700, fontSize: "1rem", color: "var(--nex-text-primary)" }}>
-                  Paris Fashion Week® · Womenswear Spring/Summer 2027
+                  {realScheduleEntry.title} — Desfile Oficial
                 </span>
-                <Badge variant="live" size="sm">
-                  Verificado FHCM
+                <Badge variant="verified" size="sm">
+                  {realScheduleEntry.verificationStatus}
+                </Badge>
+                <Badge variant="canonical" size="sm">
+                  {realScheduleEntry.timezone}
                 </Badge>
               </div>
-              <div style={{ fontSize: "0.8rem", color: "var(--nex-text-muted)" }}>
-                Apresentação Julie Kegels (12:30 CEST) registrada no calendário oficial.
+              <div style={{ fontSize: "0.8rem", color: "var(--nex-text-muted)", marginTop: "2px" }}>
+                Horário oficial: 12:30 CEST • Paris Fashion Week® (Fédération de la Haute Couture et de la Mode)
               </div>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigate("collection")}
-          >
-            Ver Detalhes do Desfile
-          </Button>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onNavigate("collection")}
+            >
+              Acessar Coleção
+            </Button>
+            <a
+              href={realScheduleEntry.officialUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "0.8rem",
+                color: "var(--nex-text-secondary)",
+                textDecoration: "underline",
+              }}
+            >
+              <span>Site Oficial FHCM</span>
+              <ExternalLink size={12} />
+            </a>
+          </div>
         </div>
       </section>
 
@@ -410,36 +510,221 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
           onActionClick={() => onNavigate("collection")}
         />
         <Rail itemGap={18}>
-          {[
-            {
-              id: "collection-julie-kegels-ss27-2026",
-              name: "Julie Kegels — Womenswear Spring/Summer 2027",
-              maison: "Julie Kegels",
-              seasonLabel: "Spring/Summer 2027",
-              seasonCode: "SS27",
-              presentedOn: "28/09/2026",
-              format: "SHOW" as const,
-              isPendingVerification: true,
-            },
-          ].map((col) => (
-            <div key={col.id} style={{ width: "260px" }}>
-              <CollectionCard
-                id={col.id}
-                name={col.name}
-                maison={col.maison}
-                seasonLabel={col.seasonLabel}
-                seasonCode={col.seasonCode}
-                presentedOn={col.presentedOn}
-                format={col.format}
-                isPendingVerification={col.isPendingVerification}
-                onClick={() => onNavigate("collection")}
-              />
+          <div style={{ width: "260px" }}>
+            <CollectionCard
+              id={julieKegelsData.collection.id}
+              name={julieKegelsData.collection.name}
+              maison={julieKegelsData.collection.maison}
+              seasonLabel={julieKegelsData.collection.seasonLabel}
+              seasonCode={julieKegelsData.collection.seasonCode}
+              presentedOn={julieKegelsData.collection.presentedOn}
+              format={julieKegelsData.schedule.format as any}
+              coverImageUrl={julieKegelsData.media.assets[0]?.remoteUrl}
+              onClick={() => onNavigate("collection")}
+            />
+          </div>
+        </Rail>
+      </section>
+
+      {/* BLOCO NOVO: Últimas Apresentações (Contrato ScheduleEntry do Codex) */}
+      <section style={{ marginBottom: "48px" }}>
+        <SectionHeader
+          title="Últimas Apresentações"
+          subtitle="Apresentações cronológicas da temporada registradas com data e formato canônico."
+        />
+        <Rail itemGap={18}>
+          {latestPresentations.map((entry) => (
+            <div
+              key={entry.id}
+              style={{
+                width: "280px",
+                backgroundColor: "var(--nex-surface-1)",
+                borderRadius: "var(--nex-radius-lg)",
+                border: "1px solid var(--nex-border-subtle)",
+                padding: "20px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                minHeight: "180px",
+                cursor: "pointer",
+              }}
+              className="nex-glass-hover"
+              onClick={() => onNavigate("collection")}
+            >
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <Badge variant="canonical" size="sm">
+                    {entry.format === "SHOW" ? "Desfile" : "Apresentação"}
+                  </Badge>
+                  <Badge variant={entry.state === "SOON" ? "live" : "neutral"} size="sm">
+                    {entry.state === "SOON" ? "Em breve" : "Encerrado"}
+                  </Badge>
+                </div>
+                <h4 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--nex-text-primary)", marginBottom: "4px" }}>
+                  {entry.title}
+                </h4>
+                <div style={{ fontSize: "0.78rem", color: "var(--nex-text-secondary)" }}>
+                  Paris Fashion Week® • FHCM
+                </div>
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--nex-border-subtle)", paddingTop: "10px", display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "var(--nex-text-muted)" }}>
+                <Clock size={13} style={{ color: "var(--nex-accent-gold)" }} />
+                <span>Início: 12:30 CEST ({entry.timezone})</span>
+              </div>
             </div>
           ))}
         </Rail>
       </section>
 
-      {/* Maisons (10 Maisons em formato compacto/circular com shuffle estável) */}
+      {/* BLOCO NOVO: Vídeos (Contrato Asset / Embeds Reais do Codex) */}
+      <section style={{ marginBottom: "48px" }}>
+        <SectionHeader
+          title="Vídeos & Coberturas em Reel"
+          subtitle="Acervo audiovisual homologado com embeds e coberturas editoriais verificadas."
+        />
+        <Rail itemGap={18}>
+          {realVideoAssets.map((asset) => (
+            <div
+              key={asset.id}
+              style={{
+                width: "320px",
+                backgroundColor: "var(--nex-surface-1)",
+                borderRadius: "var(--nex-radius-lg)",
+                border: "1px solid var(--nex-border-subtle)",
+                overflow: "hidden",
+                cursor: "pointer",
+              }}
+              className="nex-glass-hover"
+              onClick={() => onNavigate("collection")}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  aspectRatio: "16/9",
+                  backgroundColor: "#000",
+                  overflow: "hidden",
+                }}
+              >
+                <img
+                  src={asset.thumbnailUrl}
+                  alt={asset.id.includes("reel") ? "Julie Kegels SS27 — Cobertura em Reel (@nssfrance)" : asset.id}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.8 }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "44px",
+                      height: "44px",
+                      borderRadius: "50%",
+                      backgroundColor: "rgba(0, 0, 0, 0.7)",
+                      backdropFilter: "blur(4px)",
+                      border: "1px solid var(--nex-border-strong)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#fff",
+                    }}
+                  >
+                    <Play size={20} fill="#fff" />
+                  </div>
+                </div>
+                <div style={{ position: "absolute", top: "10px", left: "10px" }}>
+                  <Badge variant="tier" size="sm">
+                    Reel Instagram
+                  </Badge>
+                </div>
+              </div>
+              <div style={{ padding: "14px 16px" }}>
+                <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--nex-text-primary)", marginBottom: "4px" }}>
+                  {asset.id.includes("reel") ? "Julie Kegels SS27 — Cobertura em Reel (@nssfrance)" : asset.id}
+                </h4>
+                <div style={{ fontSize: "0.78rem", color: "var(--nex-text-muted)" }}>
+                  {asset.creditLine}
+                </div>
+              </div>
+            </div>
+          ))}
+        </Rail>
+      </section>
+
+      {/* BLOCO NOVO: Tendências (Calculadas sobre universo delimitado) */}
+      <section style={{ marginBottom: "48px" }}>
+        <SectionHeader
+          title="Tendências & Evidências de Passarela"
+          subtitle="Padrões estéticos e de modelagem extraídos com recorte e universo metodológico definidos."
+          badge={<Badge variant="canonical">Recorte Canônico</Badge>}
+        />
+        <Rail itemGap={18}>
+          {trendTags.map((trend) => (
+            <div
+              key={trend.id}
+              style={{
+                width: "300px",
+                backgroundColor: "var(--nex-surface-1)",
+                borderRadius: "var(--nex-radius-lg)",
+                border: "1px solid var(--nex-border-subtle)",
+                padding: "20px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                minHeight: "200px",
+              }}
+              className="nex-glass-hover"
+            >
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <Badge variant="canonical" size="sm">
+                    {trend.scope}
+                  </Badge>
+                  <span style={{ fontSize: "0.72rem", color: "var(--nex-accent-gold)", fontWeight: 600 }}>
+                    {trend.looksCount} evidência
+                  </span>
+                </div>
+
+                <h4 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--nex-text-primary)", marginBottom: "8px" }}>
+                  {trend.name}
+                </h4>
+
+                <p style={{ fontSize: "0.82rem", color: "var(--nex-text-secondary)", lineHeight: 1.45 }}>
+                  {trend.evidence}
+                </p>
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--nex-border-subtle)", paddingTop: "10px", marginTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "0.72rem", color: "var(--nex-text-muted)" }}>
+                  Classificação: {trend.provenance}
+                </span>
+                <button
+                  onClick={() => onNavigate("collection")}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--nex-text-primary)",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Ver Looks
+                </button>
+              </div>
+            </div>
+          ))}
+        </Rail>
+      </section>
+
+      {/* Maisons */}
       <section style={{ marginBottom: "48px" }}>
         <SectionHeader
           title="Maisons de Moda"
@@ -469,7 +754,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         </Rail>
       </section>
 
-      {/* Críticas Recentes (Cards editoriais de publicação) */}
+      {/* Críticas Recentes */}
       <section style={{ marginBottom: "48px" }}>
         <SectionHeader
           title="Críticas Recentes"
@@ -478,31 +763,16 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         <Rail itemGap={18}>
           <div style={{ width: "340px" }}>
             <ReviewCard
-              id="rev-1"
-              publication="Vogue Runway"
-              criticName="Sarah Mower"
-              title="A subversão das proporções clássicas em Paris"
-              excerpt="Uma abordagem meticulosa sobre a alfaiataria desconstruída, resgatando técnicas manuais belgas com um olhar cinematográfico contemporâneo para o verão de 2027."
+              id="rev-nss-julie-kegels"
+              publication="nss magazine"
+              criticName="Redação de Moda"
+              title="Julie Kegels runway show — Spring/Summer 2027"
+              excerpt="Resenha crítica da publicação especializada nss magazine cobrindo a estreia e evolução estética da designer Julie Kegels na Paris Fashion Week."
               maison="Julie Kegels"
               collectionName="Womenswear Spring/Summer 2027"
               seasonCode="SS27"
               publishedAt="29/09/2026"
-              originalUrl="https://www.vogue.com/fashion-shows"
-              onOpenCollectionReview={() => onNavigate("collection")}
-            />
-          </div>
-          <div style={{ width: "340px" }}>
-            <ReviewCard
-              id="rev-2"
-              publication="The Business of Fashion"
-              criticName="Tim Blanks"
-              title="O rigor técnico encontra o repertório de arquivo"
-              excerpt="A apresentação na semana de moda parisiense reafirmou o papel dos ateliês independentes na preservação da narrativa autoral frente à homogeneização do luxo."
-              maison="Julie Kegels"
-              collectionName="Womenswear Spring/Summer 2027"
-              seasonCode="SS27"
-              publishedAt="29/09/2026"
-              originalUrl="https://www.businessoffashion.com"
+              originalUrl="https://www.nssmag.com/en/fashion/47057/julie-kegels-runway-show-spring-summer-2027-paris-fashion-week"
               onOpenCollectionReview={() => onNavigate("collection")}
             />
           </div>

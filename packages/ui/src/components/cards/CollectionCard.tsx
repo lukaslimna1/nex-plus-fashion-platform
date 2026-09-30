@@ -8,12 +8,12 @@ export interface CollectionCardProps {
   maison: string;
   seasonLabel: string;
   seasonCode: string;
-  presentedOn?: string;
-  format?: "SHOW" | "PRESENTATION" | "FILM" | "OTHER";
-  coverImageUrl?: string;
-  isPendingVerification?: boolean;
-  onClick?: () => void;
-  className?: string;
+  presentedOn?: string | undefined;
+  format?: "SHOW" | "PRESENTATION" | "FILM" | "OTHER" | undefined;
+  coverImageUrl?: string | undefined;
+  isPendingVerification?: boolean | undefined;
+  onClick?: (() => void) | undefined;
+  className?: string | undefined;
 }
 
 export const CollectionCard: React.FC<CollectionCardProps> = ({
