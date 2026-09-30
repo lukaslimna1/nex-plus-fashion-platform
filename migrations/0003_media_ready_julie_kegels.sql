@@ -1,0 +1,31 @@
+ALTER TABLE assets ADD COLUMN asset_kind TEXT NOT NULL DEFAULT 'IMAGE' CHECK (asset_kind IN ('IMAGE','VIDEO'));
+ALTER TABLE assets ADD COLUMN coverage_type TEXT CHECK (coverage_type IN ('RUNWAY','PRESENTATION','DETAILS','EDITORIAL','EXTRAS'));
+ALTER TABLE assets ADD COLUMN copyright_holder TEXT;
+ALTER TABLE assets ADD COLUMN license_name TEXT;
+ALTER TABLE assets ADD COLUMN license_url TEXT;
+ALTER TABLE assets ADD COLUMN attribution_required INTEGER NOT NULL DEFAULT 1 CHECK (attribution_required IN (0,1));
+ALTER TABLE assets ADD COLUMN embed_allowed INTEGER NOT NULL DEFAULT 0 CHECK (embed_allowed IN (0,1));
+ALTER TABLE assets ADD COLUMN remote_render_allowed INTEGER NOT NULL DEFAULT 0 CHECK (remote_render_allowed IN (0,1));
+ALTER TABLE assets ADD COLUMN rehost_allowed INTEGER NOT NULL DEFAULT 0 CHECK (rehost_allowed IN (0,1));
+ALTER TABLE assets ADD COLUMN verified_at TEXT;
+
+INSERT OR IGNORE INTO sources (id, canonical_name, type, base_url, authority_tier, language, coverage_scope, country_id, access_mode, rights_notes, automation_notes, last_verified_at, active, created_at, updated_at)
+VALUES ('source-vogue-runway', 'Vogue Runway', 'RUNWAY_COVERAGE', 'https://www.vogue.com/fashion-shows', 'B', 'en', 'collection,runway,credits', 'country-france', 'PUBLIC', 'Photo credit is recorded from the public slideshow; reuse remains asset-specific.', 'Use for independent credit corroboration; do not scrape or rehost images.', '2026-09-30T00:00:00.000Z', 1, '2026-09-30T00:00:00.000Z', '2026-09-30T00:00:00.000Z');
+INSERT OR IGNORE INTO sources (id, canonical_name, type, base_url, authority_tier, language, coverage_scope, country_id, access_mode, rights_notes, automation_notes, last_verified_at, active, created_at, updated_at)
+VALUES ('source-nss', 'nss magazine', 'REVIEW_PUBLICATION', 'https://www.nssmag.com', 'B', 'en,it', 'runway,video,review', 'country-france', 'PUBLIC', 'The reel remains hosted by Instagram and belongs to its publisher/rights holders; embed only, no download or rehost.', 'Preserve the article URL and Instagram reel ID; re-check availability before display.', '2026-09-30T00:00:00.000Z', 1, '2026-09-30T00:00:00.000Z', '2026-09-30T00:00:00.000Z');
+
+UPDATE maisons SET website_url = 'https://www.juliekegels.com', updated_at = '2026-09-30T00:00:00.000Z' WHERE id = 'maison-julie-kegels';
+UPDATE collections SET source_ids = 'source-fhcm,source-vogue-runway,source-nss', updated_at = '2026-09-30T00:00:00.000Z' WHERE id = 'collection-julie-kegels-ss27-2026';
+
+INSERT OR IGNORE INTO assets (id, collection_id, title, source_page_url, remote_url, provider, provider_asset_id, thumbnail_url, alternative_urls, creator, photographer, credit_line, source_ids, rights_status, download_policy, display_mode, canonical_status, asset_kind, coverage_type, copyright_holder, attribution_required, embed_allowed, remote_render_allowed, rehost_allowed, verified_at, created_at, updated_at)
+VALUES ('asset-julie-kegels-ss27-look-01', 'collection-julie-kegels-ss27-2026', 'Julie Kegels SS27 — look 01', 'https://www.fhcm.paris/en/collection/julie-kegels-womenswear-springsummer-2027', 'https://www.fhcm.paris/sites/default/files/styles/lkt/public/lme/686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00038.jpg?itok=289PnrE8', 'FHCM', '686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00038.jpg', 'https://www.fhcm.paris/sites/default/files/styles/lkt/public/lme/686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00038.jpg?itok=289PnrE8', 'https://www.fhcm.paris/sites/default/files/styles/lkt/public/lme/686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00051.jpg?itok=_ebopqbb', 'FHCM / Launchmetrics', 'Filippo Fior', 'Filippo Fior / Gorunway.com; FHCM page credit: @Launchmetrics', 'source-fhcm,source-vogue-runway', 'UNKNOWN', 'DOWNLOAD_BLOCKED', 'INLINE', 'CANONICAL', 'IMAGE', 'RUNWAY', 'FHCM / Launchmetrics / Gorunway.com', 1, 0, 1, 0, '2026-09-30T00:00:00.000Z', '2026-09-30T00:00:00.000Z', '2026-09-30T00:00:00.000Z');
+INSERT OR IGNORE INTO assets (id, collection_id, title, source_page_url, embed_url, provider, provider_asset_id, thumbnail_url, alternative_urls, creator, credit_line, source_ids, rights_status, download_policy, display_mode, canonical_status, asset_kind, coverage_type, attribution_required, embed_allowed, remote_render_allowed, rehost_allowed, verified_at, created_at, updated_at)
+VALUES ('asset-julie-kegels-ss27-reel', 'collection-julie-kegels-ss27-2026', 'Julie Kegels SS27 — NSS France reel', 'https://www.nssmag.com/en/fashion/47057/julie-kegels-runway-show-spring-summer-2027-paris-fashion-week', 'https://www.instagram.com/reel/Dd1bejCMjsx/embed/', 'Instagram', 'Dd1bejCMjsx', 'https://www.fhcm.paris/sites/default/files/styles/lkt/public/lme/686f17c1d66fe1c55c1c2a3f153456302ed26a2c/FIO00038.jpg?itok=289PnrE8', '', 'nssfrance', 'Video published by @nssfrance; Instagram-hosted reel', 'source-nss', 'UNKNOWN', 'DOWNLOAD_BLOCKED', 'EMBED', 'CANONICAL', 'VIDEO', 'RUNWAY', 1, 1, 0, 0, '2026-09-30T00:00:00.000Z', '2026-09-30T00:00:00.000Z', '2026-09-30T00:00:00.000Z');
+
+INSERT OR IGNORE INTO asset_sources (asset_id, source_id, contribution, checked_at) VALUES ('asset-julie-kegels-ss27-look-01', 'source-fhcm', 'official collection image URL, collection page, date and FHCM media credit', '2026-09-30T00:00:00.000Z');
+INSERT OR IGNORE INTO asset_sources (asset_id, source_id, contribution, checked_at) VALUES ('asset-julie-kegels-ss27-look-01', 'source-vogue-runway', 'independent photographer and Gorunway.com credit corroboration', '2026-09-30T00:00:00.000Z');
+INSERT OR IGNORE INTO asset_sources (asset_id, source_id, contribution, checked_at) VALUES ('asset-julie-kegels-ss27-reel', 'source-nss', 'article and linked Instagram reel URL', '2026-09-30T00:00:00.000Z');
+INSERT OR IGNORE INTO professional_reviews (id, collection_id, source_id, title, url, published_at, language, canonical_status)
+VALUES ('review-nss-julie-kegels-ss27', 'collection-julie-kegels-ss27-2026', 'source-nss', 'Julie Kegels runway show — Spring/Summer 2027', 'https://www.nssmag.com/en/fashion/47057/julie-kegels-runway-show-spring-summer-2027-paris-fashion-week', '2026-09-29T00:00:00.000Z', 'en', 'CANONICAL');
+
+CREATE INDEX IF NOT EXISTS idx_assets_kind_collection ON assets(asset_kind, collection_id);

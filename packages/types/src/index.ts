@@ -17,6 +17,8 @@ export type AccessMode = "PUBLIC" | "LOGIN_REQUIRED" | "PAYWALL" | "API" | "EMBE
 export type RightsStatus = "CLEARED" | "RESTRICTED" | "UNKNOWN" | "NOT_APPLICABLE";
 export type DownloadPolicy = "DOWNLOAD_ALLOWED" | "DOWNLOAD_BLOCKED" | "DOWNLOAD_UNKNOWN";
 export type DisplayMode = "INLINE" | "EMBED" | "LINK_ONLY" | "THUMBNAIL_ONLY" | "PLACEHOLDER";
+export type AssetKind = "IMAGE" | "VIDEO";
+export type CoverageType = "RUNWAY" | "PRESENTATION" | "DETAILS" | "EDITORIAL" | "EXTRAS";
 export type CanonicalStatus = "DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED" | "CANONICAL";
 export type AIOutputStatus = "AI_DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED";
 export type ScheduleVerificationStatus = "VERIFIED" | "UNVERIFIED" | "CANCELLED" | "UNKNOWN";
@@ -82,6 +84,10 @@ export interface Asset {
   alternativeUrls: string[]; creator?: string; photographer?: string; creditLine?: string;
   sourceIds: Id[]; rightsStatus: RightsStatus; downloadPolicy: DownloadPolicy;
   displayMode: DisplayMode; localPath?: string; cacheUrl?: string; canonicalStatus: CanonicalStatus;
+  assetKind?: AssetKind; coverageType?: CoverageType; copyrightHolder?: string;
+  licenseName?: string; licenseUrl?: string; attributionRequired?: boolean;
+  embedAllowed?: boolean; remoteRenderAllowed?: boolean; rehostAllowed?: boolean;
+  verifiedAt?: ISODateTime;
 }
 export interface AssetSource { assetId: Id; sourceId: Id; contribution: string; checkedAt: ISODateTime; }
 export interface ProfessionalReview {
@@ -116,6 +122,41 @@ export interface MaisonExtraction { name: string; artisticDirection?: string; fo
 export interface EventExtraction { name: string; kind: Event["kind"]; officialUrl?: string; }
 
 export interface APIListResponse<T> { data: T[]; meta: { count: number; generatedAt: ISODateTime; revision: number; }; }
+export interface APISingleResponse<T> { data: T; meta: { generatedAt: ISODateTime; revision: number; }; }
+export interface CollectionDetail {
+  collection: Collection;
+  maison: Maison;
+  edition?: Edition;
+  event?: Event;
+  city?: CityHub;
+  schedule: ScheduleEntry[];
+  assets: Asset[];
+  sources: Source[];
+  reviews: ProfessionalReview[];
+  tags: Tag[];
+}
+export interface MaisonDetail {
+  maison: Maison;
+  collections: Collection[];
+  assets: Asset[];
+  sources: Source[];
+}
+export interface HomeRail<T> { key: string; title: string; data: T[]; }
+export interface HomeResponse {
+  rails: {
+    happeningNow: HomeRail<ScheduleEntry>;
+    upcoming: HomeRail<ScheduleEntry>;
+    recentCollections: HomeRail<Collection>;
+    latestPresentations: HomeRail<ScheduleEntry>;
+    videos: HomeRail<Asset>;
+    maisons: HomeRail<Maison>;
+    reviews: HomeRail<ProfessionalReview>;
+    trends: HomeRail<Tag>;
+    library: HomeRail<Term>;
+  };
+  generatedAt: ISODateTime;
+  revision: number;
+}
 export interface APIError { error: { code: string; message: string; }; }
 export interface HealthResponse {
   status: "ok" | "degraded"; environment: string; version: string; commit?: string;
