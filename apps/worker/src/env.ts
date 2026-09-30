@@ -11,4 +11,5 @@ export interface WorkerEnv {
   CORS_ALLOWED_ORIGINS?: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
+  YOUTUBE_API_KEY?: string;
 }

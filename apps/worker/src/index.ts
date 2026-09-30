@@ -1,7 +1,7 @@
 import { D1CatalogRepository } from "@nex-plus/data";
 import type { AssetFilters, CityFilters, EventFilters } from "@nex-plus/data";
 import { getHappeningNow, getScheduleState, getUpcoming } from "@nex-plus/core";
-import type { APIError, APIListResponse, APISingleResponse, CollectionDetail, HealthResponse, HomeResponse, MaisonDetail, ScheduleEntry } from "@nex-plus/types";
+import type { APIError, APIListResponse, APISingleResponse, CityDetail, CollectionDetail, EventDetail, HealthResponse, HomeResponse, MaisonDetail, ScheduleEntry, TermDetail } from "@nex-plus/types";
 import type { WorkerEnv } from "./env.js";
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=30, s-maxage=60", "access-control-allow-methods": "GET, OPTIONS", "access-control-allow-headers": "content-type" };
@@ -42,13 +42,13 @@ function homeResponse(input: Awaited<ReturnType<typeof buildHome>>): HomeRespons
     rails: {
       happeningNow: rail("happening-now", "Acontecendo agora", getHappeningNow(schedule, now)),
       upcoming: rail("upcoming", "Próximos eventos", upcoming),
-      recentCollections: rail("recent-collections", "Collections recentes", collections.slice(0, 12)),
-      latestPresentations: rail("latest-presentations", "Apresentações recentes", upcoming.filter((entry) => entry.format === "PRESENTATION").slice(0, 12)),
-      videos: rail("videos", "Vídeos", assets.filter((asset) => asset.assetKind === "VIDEO" || Boolean(asset.embedUrl)).slice(0, 12)),
-      maisons: rail("maisons", "Maisons", maisons.slice(0, 12)),
-      reviews: rail("reviews", "Leituras profissionais", reviews.slice(0, 12)),
-      trends: rail("trends", "Termos e tags", tags.slice(0, 12)),
-      library: rail("library", "Biblioteca", terms.slice(0, 12))
+      recentCollections: rail("recent-collections", "Collections recentes", collections.slice(0, 10)),
+      latestPresentations: rail("latest-presentations", "Apresentações recentes", upcoming.filter((entry) => entry.format === "PRESENTATION").slice(0, 10)),
+      videos: rail("videos", "Vídeos", assets.filter((asset) => asset.assetKind === "VIDEO" || Boolean(asset.embedUrl)).slice(0, 10)),
+      maisons: rail("maisons", "Maisons", maisons.slice(0, 10)),
+      reviews: rail("reviews", "Leituras profissionais", reviews.slice(0, 10)),
+      trends: rail("trends", "Termos e tags", tags.slice(0, 10)),
+      library: rail("library", "Biblioteca", terms.slice(0, 10))
     },
     generatedAt: new Date().toISOString(),
     revision: 1
@@ -88,6 +88,21 @@ export default {
       if (maisonMatch) {
         const data = await repository.getMaisonBySlug(decodeURIComponent(maisonMatch[1]!));
         return respond(data ? singleResponse<MaisonDetail>(data) : error("NOT_FOUND", "Maison not found", 404));
+      }
+      const cityMatch = url.pathname.match(/^\/api\/cities\/([^/]+)$/);
+      if (cityMatch) {
+        const data = await repository.getCityBySlug(decodeURIComponent(cityMatch[1]!));
+        return respond(data ? singleResponse<CityDetail>(data) : error("NOT_FOUND", "City not found", 404));
+      }
+      const eventMatch = url.pathname.match(/^\/api\/events\/([^/]+)$/);
+      if (eventMatch) {
+        const data = await repository.getEventBySlug(decodeURIComponent(eventMatch[1]!));
+        return respond(data ? singleResponse<EventDetail>(data) : error("NOT_FOUND", "Event not found", 404));
+      }
+      const termMatch = url.pathname.match(/^\/api\/terms\/([^/]+)$/);
+      if (termMatch) {
+        const data = await repository.getTermBySlug(decodeURIComponent(termMatch[1]!));
+        return respond(data ? singleResponse<TermDetail>(data) : error("NOT_FOUND", "Term not found", 404));
       }
       switch (url.pathname) {
         case "/api/home": return respond(singleResponse<HomeResponse>(homeResponse(await buildHome(repository))));
@@ -146,7 +161,11 @@ export default {
           return respond(listResponse(await repository.search(query)));
         }
         case "/api/reviews": return respond(listResponse(await repository.listReviews()));
-        case "/api/terms": return respond(listResponse(await repository.listTerms()));
+        case "/api/terms": {
+          const search = url.searchParams.get("search")?.trim() || undefined;
+          const category = url.searchParams.get("category")?.trim() || undefined;
+          return respond(listResponse(await repository.listTerms({ ...(search ? { search } : {}), ...(category ? { category } : {}) })));
+        }
         case "/api/tags": return respond(listResponse(await repository.listTags()));
         default: return respond(error("NOT_FOUND", "API endpoint not found", 404));
       }
