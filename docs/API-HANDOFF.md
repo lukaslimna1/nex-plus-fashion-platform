@@ -59,6 +59,11 @@ Term fields preserve `canonicalName`, `ptBrName`, `internationalName`,
 them. Schedule entries expose `sourcePageUrl` as the source-page alias of
 `officialUrl`, plus optional `venueName` and `verifiedAt`.
 
+The current remote Library contains 8 Terms (7 Getty AAT-sourced, including a
+verified batch of jacquard, tweed, organza, chiffon and denim). Missing
+Portuguese translations, definitions and aliases remain explicit gaps queued
+for AI draft plus human review; they are not fabricated in seed data.
+
 Detail routes use the same `{ data, meta }` envelope. The Worker resolves
 Country/Region, City/Event, Edition, Schedule, Collection, Maison, Asset and
 Source relationships so the frontend does not reconstruct them from labels.
