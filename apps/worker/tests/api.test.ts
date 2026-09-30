@@ -106,7 +106,20 @@ describe("Worker API contract", () => {
     expect(await searchResponse.json()).toMatchObject({ data: [{ slug: "knitwear", ptBrName: "Malharia", category: "material" }] });
     const detailResponse = await worker.fetch(new Request("https://example.test/api/terms/knitwear"), { DB: db, APP_ENV: "test" });
     expect(detailResponse.status).toBe(200);
-    expect(await detailResponse.json()).toMatchObject({ data: { term: { slug: "knitwear" }, sources: [{ id: "source-getty" }], relatedTerms: [] } });
+    expect(await detailResponse.json()).toMatchObject({ data: { term: { slug: "knitwear" }, sources: [{ id: "source-getty" }], relatedTerms: [], collections: [] } });
+  });
+
+  it("exposes trend, identity and personal-data contracts without inventing a session", async () => {
+    const trendResponse = await worker.fetch(new Request("https://example.test/api/trends"), { DB: fakeDb(), APP_ENV: "test" });
+    expect(trendResponse.status).toBe(200);
+    expect(await trendResponse.json()).toMatchObject({ data: [], meta: { count: 0 } });
+    const sessionResponse = await worker.fetch(new Request("https://example.test/api/auth/session"), { DB: fakeDb(), APP_ENV: "test" });
+    expect(await sessionResponse.json()).toMatchObject({ data: { authenticated: false, provider: "GOOGLE_OIDC" } });
+    const favoritesResponse = await worker.fetch(new Request("https://example.test/api/favorites"), { DB: fakeDb(), APP_ENV: "test" });
+    expect(favoritesResponse.status).toBe(401);
+    expect(await favoritesResponse.json()).toMatchObject({ error: { code: "AUTH_REQUIRED" } });
+    const syncResponse = await worker.fetch(new Request("https://example.test/api/sync/personal"), { DB: fakeDb(), APP_ENV: "test" });
+    expect(await syncResponse.json()).toMatchObject({ data: { provider: "GOOGLE_DRIVE_APP_DATA", publicCatalogExcluded: true } });
   });
 
   it("passes route catalog filters without truncating the data source", async () => {

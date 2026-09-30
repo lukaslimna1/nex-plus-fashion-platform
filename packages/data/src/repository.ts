@@ -1,4 +1,4 @@
-import type { Asset, CityDetail, CityHub, Collection, CollectionDetail, CollectionMediaStatus, Country, CoverageType, Edition, Event, EventDetail, ImageGroup, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, Segment, Source, Tag, Term, TermDetail } from "@nex-plus/types";
+import type { Asset, CityDetail, CityHub, Collection, CollectionDetail, CollectionMediaStatus, Country, CoverageType, CreativeDirectionHistory, Edition, Event, EventDetail, ImageGroup, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, SearchResult, Segment, Source, Tag, Term, TermDetail, Trend, TrendDetail } from "@nex-plus/types";
 
 export interface D1DatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
@@ -29,7 +29,9 @@ export interface CatalogRepository {
   listTerms(params?: TermFilters): Promise<Term[]>;
   getTermBySlug(slug: string): Promise<TermDetail | null>;
   listTags(): Promise<Tag[]>;
-  search(query: string): Promise<Array<{ id: string; type: string; name: string; slug: string }>>;
+  listTrends(): Promise<Trend[]>;
+  getTrendBySlug(slug: string): Promise<TrendDetail | null>;
+  search(query: string): Promise<SearchResult[]>;
 }
 
 export interface AssetFilters {
@@ -157,8 +159,17 @@ export class D1CatalogRepository implements CatalogRepository {
     return results.map((row) => ({ ...row, endTime: row.endTime ?? undefined, sourceIds: listIds(row.sourceIds) }));
   }
   async listMaisons(): Promise<Maison[]> {
-    const { results } = await this.db.prepare("SELECT id, name, slug, website_url AS websiteUrl, founded_year AS foundedYear, artistic_direction AS artisticDirection, official_source_ids AS sourceIds FROM maisons WHERE deleted_at IS NULL ORDER BY name").all<Omit<Maison, "officialSourceIds"> & { sourceIds: string }>();
-    return results.map(({ sourceIds, ...row }) => ({ ...row, officialSourceIds: listIds(sourceIds) }));
+    const { results } = await this.db.prepare("SELECT id, name, slug, website_url AS websiteUrl, founded_year AS foundedYear, logo_url AS logoUrl, founded_by_json AS foundedBy, country_name AS country, city_name AS city, headquarters, artistic_direction AS artisticDirection, current_creative_director AS currentCreativeDirector, about, history, socials_json AS socials, other_official_links_json AS otherOfficialLinks, research_status AS researchStatus, verified_at AS verifiedAt, official_source_ids AS sourceIds FROM maisons WHERE deleted_at IS NULL ORDER BY name").all<Record<string, unknown>>();
+    return results.map((row) => ({
+      id: String(row.id), name: String(row.name), slug: String(row.slug), officialSourceIds: listIds(row.sourceIds),
+      ...(typeof row.websiteUrl === "string" ? { websiteUrl: row.websiteUrl } : {}), ...(typeof row.foundedYear === "number" ? { foundedYear: row.foundedYear } : {}),
+      ...(typeof row.logoUrl === "string" ? { logoUrl: row.logoUrl } : {}), foundedBy: jsonArray(row.foundedBy),
+      ...(typeof row.country === "string" ? { country: row.country } : {}), ...(typeof row.city === "string" ? { city: row.city } : {}),
+      ...(typeof row.headquarters === "string" ? { headquarters: row.headquarters } : {}), ...(typeof row.artisticDirection === "string" ? { artisticDirection: row.artisticDirection } : {}),
+      ...(typeof row.currentCreativeDirector === "string" ? { currentCreativeDirector: row.currentCreativeDirector } : {}), ...(typeof row.about === "string" ? { about: row.about } : {}),
+      ...(typeof row.history === "string" ? { history: row.history } : {}), socials: jsonObject(row.socials), otherOfficialLinks: jsonObject(row.otherOfficialLinks),
+      ...(typeof row.researchStatus === "string" ? { researchStatus: row.researchStatus as NonNullable<Maison["researchStatus"]> } : {}), ...(typeof row.verifiedAt === "string" ? { verifiedAt: row.verifiedAt } : {})
+    }));
   }
   async listCollections(): Promise<Collection[]> {
     const { results } = await this.db.prepare("SELECT id, maison_id AS maisonId, edition_id AS editionId, name, slug, calendar_year AS calendarYear, season_year AS seasonYear, season_code AS seasonCode, season_label AS seasonLabel, presented_on AS presentedOn, canonical_status AS canonicalStatus, source_ids AS sourceIds, venue_name AS venueName, presentation_format AS presentationFormat, creative_director_at_collection AS creativeDirectorAtCollection, context, organizer FROM collections WHERE deleted_at IS NULL ORDER BY presented_on DESC, name").all<Omit<Collection, "sourceIds"> & { sourceIds: string }>();
@@ -200,9 +211,10 @@ export class D1CatalogRepository implements CatalogRepository {
     const event = edition ? events.find((item) => item.id === edition.eventId) : undefined;
     const city = edition ? cities.find((item) => item.id === edition.cityHubId) : undefined;
     const collectionAssets = assets.filter((item) => item.collectionId === collection.id);
+    const playableAssets = collectionAssets.filter((item) => item.availabilityStatus !== "REMOVED");
     const collectionSources = sources.filter((item) => collection.sourceIds.includes(item.id));
     const imageGroups = new Map<string, ImageGroup>();
-    for (const asset of collectionAssets.filter((item) => item.assetKind !== "VIDEO")) {
+    for (const asset of playableAssets.filter((item) => item.assetKind !== "VIDEO")) {
       const coverageType = asset.coverageType ?? "UNKNOWN";
       for (const sourceId of asset.sourceIds) {
         const key = `${sourceId}:${coverageType}`;
@@ -226,11 +238,11 @@ export class D1CatalogRepository implements CatalogRepository {
       schedule: schedule.filter((item) => item.editionId === collection.editionId),
       assets: collectionAssets,
       imageGroups: Array.from(imageGroups.values()),
-      videos: collectionAssets.filter((item) => item.assetKind === "VIDEO"),
+      videos: playableAssets.filter((item) => item.assetKind === "VIDEO"),
       sources: collectionSources,
       reviews: reviews.filter((item) => item.collectionId === collection.id),
       tags,
-      mediaStatus: mediaStatusForAssets(collectionAssets, collectionSources)
+      mediaStatus: mediaStatusForAssets(playableAssets, collectionSources)
     };
   }
   async getCityBySlug(slug: string): Promise<CityDetail | null> {
@@ -295,10 +307,18 @@ export class D1CatalogRepository implements CatalogRepository {
   async getMaisonBySlug(slug: string): Promise<MaisonDetail | null> {
     const maison = (await this.listMaisons()).find((item) => item.slug === slug);
     if (!maison) return null;
-    const [collections, assets, sources] = await Promise.all([this.listCollections(), this.listAssets(), this.listSources()]);
+    const [collections, editions, events, assets, sources, reviews, history] = await Promise.all([this.listCollections(), this.listEditions(), this.listEvents(), this.listAssets(), this.listSources(), this.listReviews(), this.listCreativeDirectionHistory(maison.id)]);
     const maisonCollections = collections.filter((item) => item.maisonId === maison.id);
     const collectionIds = new Set(maisonCollections.map((item) => item.id));
-    return { maison, collections: maisonCollections, assets: assets.filter((item) => item.collectionId && collectionIds.has(item.collectionId)), sources: sources.filter((item) => maison.officialSourceIds.includes(item.id)) };
+    const editionIds = new Set(maisonCollections.map((item) => item.editionId));
+    const maisonEvents = events.filter((event) => editions.some((edition) => edition.eventId === event.id && editionIds.has(edition.id)));
+    const maisonAssets = assets.filter((item) => item.collectionId && collectionIds.has(item.collectionId));
+    const sourceIds = new Set([...maison.officialSourceIds, ...maisonCollections.flatMap((item) => item.sourceIds)]);
+    return { maison, collections: maisonCollections, creativeDirectorHistory: history, events: maisonEvents, assets: maisonAssets, media: maisonAssets.filter((item) => item.availabilityStatus !== "REMOVED"), reviews: reviews.filter((item) => item.collectionId && collectionIds.has(item.collectionId)), sources: sources.filter((source) => sourceIds.has(source.id)) };
+  }
+  private async listCreativeDirectionHistory(maisonId: string): Promise<CreativeDirectionHistory[]> {
+    const { results } = await this.db.prepare("SELECT id, maison_id AS maisonId, person_or_team AS personOrTeam, starts_on AS startsOn, ends_on AS endsOn, source_ids AS sourceIds FROM creative_direction_history WHERE maison_id = ? ORDER BY starts_on").bind(maisonId).all<Omit<CreativeDirectionHistory, "sourceIds"> & { sourceIds: string }>();
+    return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds) }));
   }
   async listSources(): Promise<Source[]> {
     const { results } = await this.db.prepare("SELECT id, canonical_name AS canonicalName, type, base_url AS baseUrl, authority_tier AS authorityTier, language, coverage_scope AS coverageScope, region_id AS regionId, country_id AS countryId, access_mode AS accessMode, rights_notes AS rightsNotes, automation_notes AS automationNotes, last_verified_at AS lastVerifiedAt, active FROM sources WHERE deleted_at IS NULL ORDER BY canonical_name").all<Omit<Source, "language" | "coverageScope" | "active"> & { language: string; coverageScope: string; active: number }>();
@@ -326,19 +346,38 @@ export class D1CatalogRepository implements CatalogRepository {
     if (!term) return null;
     const [sources, terms] = await Promise.all([this.listSources(), this.listTerms()]);
     const relatedIds = new Set(term.relatedTermIds);
-    return { term, sources: sources.filter((source) => term.sourceIds.includes(source.id)), relatedTerms: terms.filter((candidate) => relatedIds.has(candidate.id)) };
+    return { term, sources: sources.filter((source) => term.sourceIds.includes(source.id)), relatedTerms: terms.filter((candidate) => relatedIds.has(candidate.id)), collections: [] };
   }
   async listTags(): Promise<Tag[]> {
     const { results } = await this.db.prepare("SELECT id, value, slug, source_ids AS sourceIds FROM tags ORDER BY value").all<Omit<Tag, "sourceIds"> & { sourceIds: string }>();
     return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds) }));
   }
-  async search(query: string): Promise<Array<{ id: string; type: string; name: string; slug: string }>> {
+  async listTrends(): Promise<Trend[]> {
+    const { results } = await this.db.prepare("SELECT id, name, slug, definition, scope_json AS scope, evidence_count AS evidenceCount, status, provenance, source_ids AS sourceIds, retrieved_at AS retrievedAt FROM trends WHERE deleted_at IS NULL ORDER BY evidence_count DESC, name").all<Record<string, unknown>>();
+    return results.map((row) => ({ id: String(row.id), name: String(row.name), slug: String(row.slug), ...(typeof row.definition === "string" ? { definition: row.definition } : {}), scope: jsonRecord(row.scope) as Trend["scope"], evidenceCount: Number(row.evidenceCount ?? 0), status: row.status as Trend["status"], provenance: row.provenance as Trend["provenance"], sourceIds: listIds(row.sourceIds), ...(typeof row.retrievedAt === "string" ? { retrievedAt: row.retrievedAt } : {}) }));
+  }
+  async getTrendBySlug(slug: string): Promise<TrendDetail | null> {
+    const trend = (await this.listTrends()).find((item) => item.slug === slug);
+    if (!trend) return null;
+    const [collections, assets, sources, terms] = await Promise.all([this.listCollections(), this.listAssets(), this.listSources(), this.listTerms()]);
+    const evidence = await this.db.prepare("SELECT collection_id AS collectionId, asset_id AS assetId FROM trend_evidence WHERE trend_id = ? ORDER BY ordinal").bind(trend.id).all<{ collectionId?: string; assetId?: string }>();
+    const collectionIds = new Set(evidence.results.flatMap((row) => row.collectionId ? [row.collectionId] : []));
+    const assetIds = new Set(evidence.results.flatMap((row) => row.assetId ? [row.assetId] : []));
+    return { trend, collections: collections.filter((item) => collectionIds.has(item.id)), looks: assets.filter((item) => assetIds.has(item.id)), sources: sources.filter((source) => trend.sourceIds.includes(source.id)), relatedTerms: [] };
+  }
+  async search(query: string): Promise<SearchResult[]> {
     const needle = `%${query.trim().replace(/[%_]/g, "\\$&").slice(0, 120)}%`;
-    const { results } = await this.db.prepare(`
-      SELECT id, 'MAISON' AS type, name, slug FROM maisons WHERE deleted_at IS NULL AND (name LIKE ? ESCAPE '\\' OR slug LIKE ? ESCAPE '\\')
-      UNION ALL SELECT id, 'COLLECTION', name, slug FROM collections WHERE deleted_at IS NULL AND (name LIKE ? ESCAPE '\\' OR slug LIKE ? ESCAPE '\\')
-      ORDER BY name LIMIT 50`).bind(needle, needle, needle, needle).all<{ id: string; type: string; name: string; slug: string }>();
-    return results;
+    const statements = [
+      this.db.prepare("SELECT h.id, 'CITY' AS type, h.slug, h.name AS title, c.name AS subtitle, h.cover_url AS thumbnail, '/cities/' || h.slug AS routeTarget FROM city_hubs h LEFT JOIN countries c ON c.id = h.country_id WHERE h.deleted_at IS NULL AND (h.name LIKE ? ESCAPE '\\' OR h.slug LIKE ? ESCAPE '\\')").bind(needle, needle),
+      this.db.prepare("SELECT e.id, 'EVENT' AS type, e.slug, e.name AS title, e.organizer AS subtitle, e.cover_url AS thumbnail, '/events/' || e.slug AS routeTarget FROM events e WHERE e.deleted_at IS NULL AND (e.name LIKE ? ESCAPE '\\' OR e.slug LIKE ? ESCAPE '\\')").bind(needle, needle),
+      this.db.prepare("SELECT ed.id, 'EDITION' AS type, ed.id AS slug, ed.season_label AS title, e.name AS subtitle, NULL AS thumbnail, '/editions/' || ed.id AS routeTarget FROM editions ed INNER JOIN events e ON e.id = ed.event_id WHERE ed.deleted_at IS NULL AND (ed.season_label LIKE ? ESCAPE '\\' OR ed.season_code LIKE ? ESCAPE '\\' OR e.name LIKE ? ESCAPE '\\')").bind(needle, needle, needle),
+      this.db.prepare("SELECT c.id, 'COLLECTION' AS type, c.slug, c.name AS title, m.name AS subtitle, NULL AS thumbnail, '/collections/' || c.slug AS routeTarget FROM collections c INNER JOIN maisons m ON m.id = c.maison_id WHERE c.deleted_at IS NULL AND (c.name LIKE ? ESCAPE '\\' OR c.slug LIKE ? ESCAPE '\\')").bind(needle, needle),
+      this.db.prepare("SELECT m.id, 'MAISON' AS type, m.slug, m.name AS title, m.country_name AS subtitle, m.logo_url AS thumbnail, '/maisons/' || m.slug AS routeTarget FROM maisons m WHERE m.deleted_at IS NULL AND (m.name LIKE ? ESCAPE '\\' OR m.slug LIKE ? ESCAPE '\\')").bind(needle, needle),
+      this.db.prepare("SELECT t.id, 'TERM' AS type, COALESCE(t.slug, t.id) AS slug, COALESCE(t.pt_br_name, t.canonical_name, t.value) AS title, t.category AS subtitle, NULL AS thumbnail, '/terms/' || COALESCE(t.slug, t.id) AS routeTarget FROM terms t WHERE (t.value LIKE ? ESCAPE '\\' OR COALESCE(t.canonical_name, '') LIKE ? ESCAPE '\\' OR COALESCE(t.pt_br_name, '') LIKE ? ESCAPE '\\')").bind(needle, needle, needle),
+      this.db.prepare("SELECT tr.id, 'TREND' AS type, tr.slug, tr.name AS title, tr.status AS subtitle, NULL AS thumbnail, '/trends/' || tr.slug AS routeTarget FROM trends tr WHERE tr.deleted_at IS NULL AND (tr.name LIKE ? ESCAPE '\\' OR tr.slug LIKE ? ESCAPE '\\')").bind(needle, needle)
+    ];
+    const batches = await Promise.all(statements.map((statement) => statement.all<SearchResult>()));
+    return batches.flatMap((batch) => batch.results).sort((left, right) => left.title.localeCompare(right.title)).slice(0, 50);
   }
 }
 

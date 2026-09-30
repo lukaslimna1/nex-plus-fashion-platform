@@ -11,20 +11,23 @@ function provider(name: string, fail = false): AIProvider {
   };
 }
 
+const context = { entityType: "TERM" as const, entityId: "term-1", canonicalName: "Knitwear", language: "en", sourceUrls: ["https://example.test/source"], currentState: {}, allowedOutputSchema: { type: "object" } };
+const requestOptions = { context, outputSchema: { type: "object" } };
+
 describe("AI provider router", () => {
   it("uses the preferred provider and falls back without exposing it to domain code", async () => {
     const router = new AIProviderRouter({ gemini: provider("gemini", true), workersAI: provider("workers-ai") }, { maxAttempts: 1 });
-    const result = await router.extractStructuredData({ task: "translateToPtBr", input: "{}", inputSourceIds: ["s-1"], schemaVersion: "1.0" });
+    const result = await router.extractStructuredData({ task: "translateToPtBr", input: "{}", inputSourceIds: ["s-1"], schemaVersion: "1.0", ...requestOptions });
     expect(result.provider).toBe("workers-ai");
     expect(result.fallbackUsed).toBe(true);
   });
   it("rejects deterministic tasks at the AI boundary", async () => {
     const router = new AIProviderRouter({ gemini: provider("gemini") });
-    await expect(router.extractStructuredData({ task: "normalizeNames", input: "{}", inputSourceIds: [], schemaVersion: "1.0" })).rejects.toThrow("deterministic");
+    await expect(router.extractStructuredData({ task: "normalizeNames", input: "{}", inputSourceIds: [], schemaVersion: "1.0", ...requestOptions })).rejects.toThrow("deterministic");
   });
   it("does not silently fallback complex editorial extraction", async () => {
     const router = new AIProviderRouter({ gemini: provider("gemini", true), workersAI: provider("workers-ai") }, { maxAttempts: 1 });
-    await expect(router.extractStructuredData({ task: "extractCollectionMetadata", input: "{}", inputSourceIds: [], schemaVersion: "1.0" })).rejects.toThrow("provider failed");
+    await expect(router.extractStructuredData({ task: "extractCollectionMetadata", input: "{}", inputSourceIds: [], schemaVersion: "1.0", ...requestOptions })).rejects.toThrow("provider failed");
   });
   it("retries 503 with exponential scheduling and returns audit metadata", async () => {
     let attempts = 0;
@@ -39,7 +42,7 @@ describe("AI provider router", () => {
     };
     const statuses: string[] = [];
     const router = new AIProviderRouter({ gemini: flaky }, { baseDelayMs: 0, maxDelayMs: 0, jitterRatio: 0, sleep: async () => undefined, logger: (entry) => statuses.push(entry.status) });
-    const result = await router.extractStructuredData({ task: "extractCollectionMetadata", input: "{}", inputSourceIds: [], schemaVersion: "1.0" });
+    const result = await router.extractStructuredData({ task: "extractCollectionMetadata", input: "{}", inputSourceIds: [], schemaVersion: "1.0", ...requestOptions });
     expect(attempts).toBe(3);
     expect(statuses).toEqual(["503", "503"]);
     expect(result).toMatchObject({ provider: "gemini", model: "test-model", fallbackUsed: false, attempts: 3 });

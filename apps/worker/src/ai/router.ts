@@ -10,7 +10,7 @@ export interface AIProviderRouterOptions {
   jitterRatio?: number;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
-  logger?: (entry: { provider: string; model: string; attempt: number; status: string }) => void;
+  logger?: (entry: { provider: string; model: string; attempt: number; status: string; entityType?: string; entityId?: string }) => void;
 }
 
 const lightweightFallbackTasks = new Set<AITask>(["normalizeCredits", "translateToPtBr", "suggestTags"]);
@@ -86,7 +86,7 @@ export class AIProviderRouter {
       } catch (error) {
         lastError = error;
         const status = statusOf(error);
-        this.options.logger({ provider: provider.name, model: provider.model, attempt, status });
+        this.options.logger({ provider: provider.name, model: provider.model, attempt, status, entityType: request.context.entityType, ...(request.context.entityId ? { entityId: request.context.entityId } : {}) });
         if (!retryable(error) || attempt >= this.options.maxAttempts) break;
         const exponential = Math.min(this.options.maxDelayMs, this.options.baseDelayMs * 2 ** (attempt - 1));
         const jitter = exponential * this.options.jitterRatio * this.options.random();

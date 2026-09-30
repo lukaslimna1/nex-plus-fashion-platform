@@ -46,6 +46,9 @@ export type ScheduleState = "UPCOMING" | "SOON" | "NOW" | "ENDED" | "UNKNOWN";
 export type ResearchCompleteness = "COMPLETE" | "PARTIAL" | "NEEDS_RESEARCH" | "UNVERIFIED";
 export type ImportStatus = "NEW" | "UPDATED" | "UNCHANGED" | "REVIEW_REQUIRED";
 export type CoverMatchStatus = "MATCHED" | "ALIAS_MATCH" | "UNMATCHED" | "AMBIGUOUS" | "MISSING";
+export type TrendProvenance = "CURATED" | "SOURCE" | "COMMUNITY" | "MODEL_SUGGESTION";
+export type TrendStatus = "CONFIRMED" | "PENDING_REVIEW" | "MODEL_SUGGESTION" | "NO_EVIDENCE";
+export type FavoriteTargetType = "COLLECTION" | "ASSET" | "MAISON" | "CITY" | "EVENT" | "TERM";
 
 export interface CoverReference {
   assetKey: string;
@@ -105,7 +108,10 @@ export interface ScheduleEntry {
 }
 export interface Maison {
   id: Id; name: string; slug: string; websiteUrl?: string; foundedYear?: number;
-  artisticDirection?: string; officialSourceIds: Id[];
+  logoUrl?: string; foundedBy?: string[]; country?: string; city?: string; headquarters?: string;
+  artisticDirection?: string; currentCreativeDirector?: string; about?: string; history?: string;
+  socials?: Record<string, string>; otherOfficialLinks?: Record<string, string>;
+  researchStatus?: ResearchCompleteness; verifiedAt?: ISODateTime; officialSourceIds: Id[];
 }
 export interface CreativeDirectionHistory {
   id: Id; maisonId: Id; personOrTeam: string; startsOn?: CivilDate; endsOn?: CivilDate; sourceIds: Id[];
@@ -164,7 +170,7 @@ export interface Tag { id: Id; value: string; slug: string; sourceIds: Id[]; }
 export interface CollectionTag { collectionId: Id; tagId: Id; evidence?: string; }
 export interface AssetTag { assetId: Id; tagId: Id; evidence?: string; }
 export interface LookTag { assetId: Id; tagId: Id; lookNumber?: number; }
-export interface Favorite { id: Id; identityId: string; targetType: "COLLECTION" | "ASSET" | "MAISON"; targetId: Id; createdAt: ISODateTime; }
+export interface Favorite { id: Id; identityId: string; targetType: FavoriteTargetType; targetId: Id; createdAt: ISODateTime; }
 export interface CommunityReaction { id: Id; identityKey: string; targetType: "COLLECTION" | "ASSET"; targetId: Id; reaction: string; createdAt: ISODateTime; }
 export interface CommunityTag { id: Id; identityKey: string; targetType: "COLLECTION" | "ASSET"; targetId: Id; tagId: Id; createdAt: ISODateTime; }
 export interface SyncRecord { entityType: string; entityId: Id; revision: number; updatedAt: ISODateTime; deletedAt?: ISODateTime; }
@@ -176,7 +182,6 @@ export type AITask =
   | "summarizePressRelease" | "summarizeProfessionalReview" | "detectSourceChanges"
   | "suggestTags" | "suggestTerms" | "suggestTrendEvidence" | "extractImageMetadata" | "extractVideoMetadata";
 
-export interface AIRequest { task: AITask; input: string; inputSourceIds: Id[]; schemaVersion: string; }
 export interface AIEnvelope<T> {
   provider: string; model: string; generatedAt: ISODateTime; timestamp: ISODateTime;
   fallbackUsed: boolean; attempts: number; inputSourceIds: Id[];
@@ -208,7 +213,11 @@ export interface ImageGroup { sourceId: Id; coverageType: CoverageType; source?:
 export interface MaisonDetail {
   maison: Maison;
   collections: Collection[];
+  creativeDirectorHistory: CreativeDirectionHistory[];
+  events: Event[];
   assets: Asset[];
+  media: Asset[];
+  reviews: ProfessionalReview[];
   sources: Source[];
 }
 export interface CityDetail {
@@ -239,6 +248,28 @@ export interface TermDetail {
   term: Term;
   sources: Source[];
   relatedTerms: Term[];
+  collections: Collection[];
+}
+export interface TrendScope {
+  periodStart?: CivilDate;
+  periodEnd?: CivilDate;
+  eventIds?: Id[];
+  cityIds?: Id[];
+  editionIds?: Id[];
+  seasonCodes?: string[];
+  collectionIds?: Id[];
+}
+export interface Trend {
+  id: Id; name: string; slug: string; definition?: string; scope: TrendScope;
+  evidenceCount: number; status: TrendStatus; provenance: TrendProvenance;
+  sourceIds: Id[]; retrievedAt?: ISODateTime;
+}
+export interface TrendDetail {
+  trend: Trend; collections: Collection[]; looks: Asset[]; sources: Source[]; relatedTerms: Term[];
+}
+export interface SearchResult {
+  type: "CITY" | "EVENT" | "EDITION" | "COLLECTION" | "MAISON" | "TERM" | "TREND";
+  id: Id; slug: string; title: string; subtitle?: string; thumbnail?: string; routeTarget: string;
 }
 export interface HomeRail<T> { key: string; title: string; data: T[]; }
 export interface HomeResponse {
@@ -250,7 +281,7 @@ export interface HomeResponse {
     videos: HomeRail<Asset>;
     maisons: HomeRail<Maison>;
     reviews: HomeRail<ProfessionalReview>;
-    trends: HomeRail<Tag>;
+    trends: HomeRail<Trend>;
     library: HomeRail<Term>;
   };
   generatedAt: ISODateTime;
@@ -259,6 +290,43 @@ export interface HomeResponse {
 export interface MediaResearchJob {
   id: Id; collectionId: Id; sourceId: Id; mediaType: AssetKind; status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "BLOCKED";
   lastAttemptAt?: ISODateTime; nextEligibleAttemptAt?: ISODateTime; resultCount: number; error?: string; metadata?: Record<string, unknown>;
+}
+export type AIEnrichmentEntityType = "TERM" | "MAISON" | "COLLECTION" | "EVENT";
+export type AIEnrichmentJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "BLOCKED";
+export interface AIEntityContext {
+  entityType: AIEnrichmentEntityType;
+  entityId?: Id;
+  canonicalName: string;
+  originalLabel?: string;
+  language: string;
+  sourceUrls: string[];
+  retrievedText?: string;
+  currentState: Record<string, unknown>;
+  allowedOutputSchema: Record<string, unknown>;
+}
+export interface AIRequest {
+  task: AITask; input: string; inputSourceIds: Id[]; schemaVersion: string;
+  context: AIEntityContext; outputSchema: Record<string, unknown>;
+}
+export interface AIEnrichmentJob {
+  id: Id; entityType: AIEnrichmentEntityType; entityId: Id; task: AITask;
+  status: AIEnrichmentJobStatus; inputSourceIds: Id[]; context: AIEntityContext;
+  result?: Record<string, unknown>; reviewStatus: AIOutputStatus;
+  attempts: number; provider?: string; model?: string; error?: string;
+  scheduledAt?: ISODateTime; completedAt?: ISODateTime;
+}
+export interface AuthSession {
+  authenticated: boolean; provider: "GOOGLE_OIDC"; subject?: string; email?: string;
+  displayName?: string; pictureUrl?: string; expiresAt?: ISODateTime; loginUrl?: string;
+}
+export interface UserPreferences {
+  language: string; timezone: string; autoplayPreview: boolean; reducedMotion: boolean;
+  mediaPreference: "REMOTE" | "EMBED" | "LINK_ONLY" | "LOCAL_FIRST";
+  editorialPreferences: Record<string, unknown>;
+}
+export interface PersonalSyncContract {
+  provider: "GOOGLE_DRIVE_APP_DATA"; scopes: Array<"favorites" | "preferences" | "settings" | "reading-state">;
+  publicCatalogExcluded: boolean; consentRequired: boolean;
 }
 export interface SourceAdapterCapabilities {
   supportsImages: boolean; supportsVideo: boolean; supportsSchedule: boolean; supportsMetadata: boolean; supportsEmbed: boolean; supportsPagination: boolean;

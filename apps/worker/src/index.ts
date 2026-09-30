@@ -1,11 +1,15 @@
 import { D1CatalogRepository } from "@nex-plus/data";
 import type { AssetFilters, CityFilters, EventFilters } from "@nex-plus/data";
 import { getHappeningNow, getScheduleState, getUpcoming } from "@nex-plus/core";
-import type { APIError, APIListResponse, APISingleResponse, CityDetail, CollectionDetail, EventDetail, HealthResponse, HomeResponse, MaisonDetail, ScheduleEntry, TermDetail } from "@nex-plus/types";
+import type { APIError, APIListResponse, APISingleResponse, AuthSession, CityDetail, CollectionDetail, EventDetail, HealthResponse, HomeResponse, MaisonDetail, PersonalSyncContract, ScheduleEntry, TermDetail, TrendDetail } from "@nex-plus/types";
 import type { WorkerEnv } from "./env.js";
+import { GeminiAIProvider } from "./ai/gemini.js";
+import { CloudflareAIProvider } from "./ai/cloudflare.js";
+import { AIProviderRouter } from "./ai/router.js";
+import { runAIEnrichmentBatch } from "./ai/jobs.js";
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=30, s-maxage=60", "access-control-allow-methods": "GET, OPTIONS", "access-control-allow-headers": "content-type" };
-const securityHeaders = { "x-content-type-options": "nosniff", "x-frame-options": "DENY", "referrer-policy": "strict-origin-when-cross-origin", "permissions-policy": "camera=(), microphone=(), geolocation=()", "content-security-policy": "default-src 'self'; frame-src https://www.youtube.com https://player.vimeo.com https://www.instagram.com; img-src 'self' https: data:; connect-src 'self' https:; style-src 'self' 'unsafe-inline'" };
+const securityHeaders = { "x-content-type-options": "nosniff", "x-frame-options": "DENY", "referrer-policy": "strict-origin-when-cross-origin", "permissions-policy": "camera=(), microphone=(), geolocation=()", "content-security-policy": "default-src 'self'; frame-src https://www.youtube.com https://player.vimeo.com; img-src 'self' https: data:; connect-src 'self' https:; style-src 'self' 'unsafe-inline'" };
 
 const localDevelopmentOrigins = new Set(["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"]);
 
@@ -34,7 +38,7 @@ function listResponse<T>(data: T[]): Response { return json<APIListResponse<T>>(
 function singleResponse<T>(data: T): Response { return json<APISingleResponse<T>>({ data, meta: { generatedAt: new Date().toISOString(), revision: 1 } }); }
 
 function homeResponse(input: Awaited<ReturnType<typeof buildHome>>): HomeResponse {
-  const { schedule, collections, assets, maisons, reviews, tags, terms } = input;
+  const { schedule, collections, assets, maisons, reviews, trends, terms } = input;
   const now = new Date();
   const upcoming = getUpcoming(schedule, now);
   const rail = <T>(key: string, title: string, data: T[]) => ({ key, title, data });
@@ -47,7 +51,7 @@ function homeResponse(input: Awaited<ReturnType<typeof buildHome>>): HomeRespons
       videos: rail("videos", "Vídeos", assets.filter((asset) => asset.assetKind === "VIDEO" || Boolean(asset.embedUrl)).slice(0, 10)),
       maisons: rail("maisons", "Maisons", maisons.slice(0, 10)),
       reviews: rail("reviews", "Leituras profissionais", reviews.slice(0, 10)),
-      trends: rail("trends", "Termos e tags", tags.slice(0, 10)),
+      trends: rail("trends", "Tendências com evidência", trends.slice(0, 10)),
       library: rail("library", "Biblioteca", terms.slice(0, 10))
     },
     generatedAt: new Date().toISOString(),
@@ -56,10 +60,17 @@ function homeResponse(input: Awaited<ReturnType<typeof buildHome>>): HomeRespons
 }
 
 async function buildHome(repository: D1CatalogRepository) {
-  const [schedule, collections, assets, maisons, reviews, tags, terms] = await Promise.all([
-    repository.listSchedule(), repository.listCollections(), repository.listAssets(), repository.listMaisons(), repository.listReviews(), repository.listTags(), repository.listTerms()
+  const [schedule, collections, assets, maisons, reviews, trends, terms] = await Promise.all([
+    repository.listSchedule(), repository.listCollections(), repository.listAssets(), repository.listMaisons(), repository.listReviews(), repository.listTrends(), repository.listTerms()
   ]);
-  return { schedule, collections, assets, maisons, reviews, tags, terms };
+  return { schedule, collections, assets, maisons, reviews, trends, terms };
+}
+
+function aiRouter(env: WorkerEnv): AIProviderRouter {
+  return new AIProviderRouter({
+    ...(env.GEMINI_API_KEY ? { gemini: new GeminiAIProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL) } : {}),
+    ...(env.AI ? { workersAI: new CloudflareAIProvider(env.AI) } : {})
+  });
 }
 
 async function health(env: WorkerEnv): Promise<Response> {
@@ -103,6 +114,11 @@ export default {
       if (termMatch) {
         const data = await repository.getTermBySlug(decodeURIComponent(termMatch[1]!));
         return respond(data ? singleResponse<TermDetail>(data) : error("NOT_FOUND", "Term not found", 404));
+      }
+      const trendMatch = url.pathname.match(/^\/api\/trends\/([^/]+)$/);
+      if (trendMatch) {
+        const data = await repository.getTrendBySlug(decodeURIComponent(trendMatch[1]!));
+        return respond(data ? singleResponse<TrendDetail>(data) : error("NOT_FOUND", "Trend not found", 404));
       }
       switch (url.pathname) {
         case "/api/home": return respond(singleResponse<HomeResponse>(homeResponse(await buildHome(repository))));
@@ -161,10 +177,23 @@ export default {
           return respond(listResponse(await repository.search(query)));
         }
         case "/api/reviews": return respond(listResponse(await repository.listReviews()));
+        case "/api/trends": return respond(listResponse(await repository.listTrends()));
         case "/api/terms": {
           const search = url.searchParams.get("search")?.trim() || undefined;
           const category = url.searchParams.get("category")?.trim() || undefined;
           return respond(listResponse(await repository.listTerms({ ...(search ? { search } : {}), ...(category ? { category } : {}) })));
+        }
+        case "/api/auth/session": {
+          const session: AuthSession = { authenticated: false, provider: "GOOGLE_OIDC", ...(env.GOOGLE_CLIENT_ID ? { loginUrl: "/api/auth/login" } : {}) };
+          return respond(singleResponse(session));
+        }
+        case "/api/auth/logout": return respond(singleResponse<AuthSession>({ authenticated: false, provider: "GOOGLE_OIDC" }));
+        case "/api/auth/login": return respond(env.GOOGLE_CLIENT_ID && env.GOOGLE_REDIRECT_URI ? json({ error: { code: "OIDC_HANDOFF_REQUIRED", message: "Google OIDC authorization handoff is configured but must be completed by the frontend callback." } }, { status: 501 }) : error("AUTH_NOT_CONFIGURED", "Google Identity credentials are not configured", 503));
+        case "/api/favorites": return respond(error("AUTH_REQUIRED", "Google Identity is required for personal favorites", 401));
+        case "/api/preferences": return respond(error("AUTH_REQUIRED", "Google Identity is required for personal preferences", 401));
+        case "/api/sync/personal": {
+          const sync: PersonalSyncContract = { provider: "GOOGLE_DRIVE_APP_DATA", scopes: ["favorites", "preferences", "settings", "reading-state"], publicCatalogExcluded: true, consentRequired: true };
+          return respond(singleResponse(sync));
         }
         case "/api/tags": return respond(listResponse(await repository.listTags()));
         default: return respond(error("NOT_FOUND", "API endpoint not found", 404));
@@ -172,6 +201,9 @@ export default {
     } catch (cause) {
       return respond(error("DATABASE_ERROR", cause instanceof Error ? cause.message : "Database request failed", 503));
     }
+  },
+  async scheduled(_controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runAIEnrichmentBatch(env.DB, aiRouter(env), 3));
   }
 };
 

@@ -10,8 +10,12 @@ export class GeminiAIProvider implements AIProvider {
     const client = new GoogleGenAI({ apiKey: this.apiKey });
     const response = await client.models.generateContent({
       model: this.model,
-      contents: request.input,
-      config: { responseMimeType: "application/json" }
+      contents: JSON.stringify({
+        instruction: request.input,
+        context: request.context,
+        allowedOutputSchema: request.outputSchema
+      }),
+      config: { responseMimeType: "application/json", responseJsonSchema: request.outputSchema }
     });
     const text = response.text?.trim() ?? "";
     if (!text) throw new Error("Gemini returned an empty response");
