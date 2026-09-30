@@ -18,8 +18,11 @@ export type RightsStatus = "CLEARED" | "RESTRICTED" | "UNKNOWN" | "NOT_APPLICABL
 export type DownloadPolicy = "DOWNLOAD_ALLOWED" | "DOWNLOAD_BLOCKED" | "DOWNLOAD_UNKNOWN";
 export type DisplayMode = "INLINE" | "EMBED" | "LINK_ONLY" | "THUMBNAIL_ONLY" | "PLACEHOLDER";
 export type AssetKind = "IMAGE" | "VIDEO";
-export type CoverageType = "RUNWAY" | "PRESENTATION" | "DETAILS" | "EDITORIAL" | "EXTRAS";
+export type CoverageType = "RUNWAY" | "BACKSTAGE" | "DETAILS" | "EDITORIAL" | "PRESENTATION" | "EXTRAS" | "UNKNOWN";
 export type AssetCoverageScope = "LOOKBOOK_IMAGE" | "RUNWAY_COVERAGE_REEL" | "FULL_COLLECTION" | "DETAIL" | "EDITORIAL" | "UNKNOWN";
+export type VideoType = "FULL_SHOW" | "OFFICIAL_FILM" | "LIVESTREAM_REPLAY" | "RUNWAY_COVERAGE" | "BACKSTAGE" | "INTERVIEW" | "BEHIND_THE_SCENES" | "HIGHLIGHTS" | "REEL_SHORT" | "PRESS_VIDEO" | "OTHER_VERIFIED";
+export type VideoCompleteness = "FULL" | "PARTIAL" | "UNKNOWN";
+export type VideoOfficiality = "OFFICIAL" | "PARTNER_VERIFIED" | "PROFESSIONAL_VERIFIED" | "UNKNOWN";
 export type CanonicalStatus = "DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED" | "CANONICAL";
 export type AIOutputStatus = "AI_DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED";
 export type ScheduleVerificationStatus = "VERIFIED" | "UNVERIFIED" | "CANCELLED" | "UNKNOWN";
@@ -72,6 +75,8 @@ export interface Collection {
   id: Id; maisonId: Id; editionId: Id; name: string; slug: string;
   calendarYear: number; seasonYear: number; seasonCode: string; seasonLabel: string;
   presentedOn?: CivilDate; canonicalStatus: CanonicalStatus; sourceIds: Id[];
+  venueName?: string; presentationFormat?: ScheduleEntry["format"];
+  creativeDirectorAtCollection?: string; context?: string; organizer?: string;
 }
 export interface Source {
   id: Id; canonicalName: string; type: SourceType; baseUrl: string;
@@ -83,17 +88,20 @@ export interface Asset {
   id: Id; collectionId?: Id; title?: string; sourcePageUrl: string; remoteUrl?: string;
   embedUrl?: string; provider?: string; providerAssetId?: string; thumbnailUrl?: string;
   alternativeUrls: string[]; creator?: string; photographer?: string; creditLine?: string;
-  sourceIds: Id[]; rightsStatus: RightsStatus; downloadPolicy: DownloadPolicy;
+  sourceIds: Id[]; sourceId?: Id; rightsStatus: RightsStatus; downloadPolicy: DownloadPolicy;
   displayMode: DisplayMode; localPath?: string; cacheUrl?: string; canonicalStatus: CanonicalStatus;
   assetKind?: AssetKind; coverageType?: CoverageType; coverageScope?: AssetCoverageScope; copyrightHolder?: string;
   licenseName?: string; licenseUrl?: string; attributionRequired?: boolean;
   embedAllowed?: boolean; remoteRenderAllowed?: boolean; rehostAllowed?: boolean;
-  verifiedAt?: ISODateTime; sequenceNumber?: number;
+  verifiedAt?: ISODateTime; sequenceNumber?: number; lookNumber?: number;
+  canonicalUrl?: string; channelName?: string; durationSeconds?: number; publishedAt?: ISODateTime;
+  videoType?: VideoType; completeness?: VideoCompleteness; officiality?: VideoOfficiality;
 }
 export interface AssetSource { assetId: Id; sourceId: Id; contribution: string; checkedAt: ISODateTime; }
 export interface ProfessionalReview {
   id: Id; collectionId?: Id; sourceId: Id; title: string; url: string;
   publishedAt?: ISODateTime; language: string; canonicalStatus: CanonicalStatus;
+  author?: string; publication?: string; summary?: string;
 }
 export interface Term { id: Id; value: string; language: string; definition?: string; sourceIds: Id[]; }
 export interface Tag { id: Id; value: string; slug: string; sourceIds: Id[]; }
@@ -132,10 +140,13 @@ export interface CollectionDetail {
   city?: CityHub;
   schedule: ScheduleEntry[];
   assets: Asset[];
+  imageGroups: ImageGroup[];
+  videos: Asset[];
   sources: Source[];
   reviews: ProfessionalReview[];
   tags: Tag[];
 }
+export interface ImageGroup { sourceId: Id; coverageType: CoverageType; source?: Source; assets: Asset[]; }
 export interface MaisonDetail {
   maison: Maison;
   collections: Collection[];

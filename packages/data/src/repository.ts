@@ -1,4 +1,4 @@
-import type { Asset, CityHub, Collection, CollectionDetail, Country, Edition, Event, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, Source, Tag, Term } from "@nex-plus/types";
+import type { Asset, CityHub, Collection, CollectionDetail, Country, CoverageType, Edition, Event, ImageGroup, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, Source, Tag, Term } from "@nex-plus/types";
 
 export interface D1DatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
@@ -19,7 +19,7 @@ export interface CatalogRepository {
   listSchedule(params?: { from?: string; to?: string }): Promise<ScheduleEntry[]>;
   listMaisons(): Promise<Maison[]>;
   listCollections(): Promise<Collection[]>;
-  listAssets(): Promise<Asset[]>;
+  listAssets(params?: AssetFilters): Promise<Asset[]>;
   getCollectionBySlug(slug: string): Promise<CollectionDetail | null>;
   getMaisonBySlug(slug: string): Promise<MaisonDetail | null>;
   listSources(): Promise<Source[]>;
@@ -27,6 +27,13 @@ export interface CatalogRepository {
   listTerms(): Promise<Term[]>;
   listTags(): Promise<Tag[]>;
   search(query: string): Promise<Array<{ id: string; type: string; name: string; slug: string }>>;
+}
+
+export interface AssetFilters {
+  collection?: string;
+  source?: string;
+  coverageType?: CoverageType;
+  mediaType?: Asset["assetKind"];
 }
 
 function asBoolean(value: unknown): boolean { return value === 1 || value === true; }
@@ -72,12 +79,22 @@ export class D1CatalogRepository implements CatalogRepository {
     return results.map(({ sourceIds, ...row }) => ({ ...row, officialSourceIds: listIds(sourceIds) }));
   }
   async listCollections(): Promise<Collection[]> {
-    const { results } = await this.db.prepare("SELECT id, maison_id AS maisonId, edition_id AS editionId, name, slug, calendar_year AS calendarYear, season_year AS seasonYear, season_code AS seasonCode, season_label AS seasonLabel, presented_on AS presentedOn, canonical_status AS canonicalStatus, source_ids AS sourceIds FROM collections WHERE deleted_at IS NULL ORDER BY presented_on DESC, name").all<Omit<Collection, "sourceIds"> & { sourceIds: string }>();
+    const { results } = await this.db.prepare("SELECT id, maison_id AS maisonId, edition_id AS editionId, name, slug, calendar_year AS calendarYear, season_year AS seasonYear, season_code AS seasonCode, season_label AS seasonLabel, presented_on AS presentedOn, canonical_status AS canonicalStatus, source_ids AS sourceIds, venue_name AS venueName, presentation_format AS presentationFormat, creative_director_at_collection AS creativeDirectorAtCollection, context, organizer FROM collections WHERE deleted_at IS NULL ORDER BY presented_on DESC, name").all<Omit<Collection, "sourceIds"> & { sourceIds: string }>();
     return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds) }));
   }
-  async listAssets(): Promise<Asset[]> {
-    const { results } = await this.db.prepare("SELECT id, collection_id AS collectionId, title, source_page_url AS sourcePageUrl, remote_url AS remoteUrl, embed_url AS embedUrl, provider, provider_asset_id AS providerAssetId, thumbnail_url AS thumbnailUrl, alternative_urls AS alternativeUrls, creator, photographer, credit_line AS creditLine, source_ids AS sourceIds, rights_status AS rightsStatus, download_policy AS downloadPolicy, display_mode AS displayMode, local_path AS localPath, cache_url AS cacheUrl, canonical_status AS canonicalStatus, asset_kind AS assetKind, coverage_type AS coverageType, coverage_scope AS coverageScope, copyright_holder AS copyrightHolder, license_name AS licenseName, license_url AS licenseUrl, attribution_required AS attributionRequired, embed_allowed AS embedAllowed, remote_render_allowed AS remoteRenderAllowed, rehost_allowed AS rehostAllowed, verified_at AS verifiedAt, sequence_number AS sequenceNumber FROM assets WHERE deleted_at IS NULL ORDER BY COALESCE(sequence_number, 999999), id").all<AssetRow>();
-    return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds), alternativeUrls: listIds(row.alternativeUrls), attributionRequired: asBoolean(row.attributionRequired), embedAllowed: asBoolean(row.embedAllowed), remoteRenderAllowed: asBoolean(row.remoteRenderAllowed), rehostAllowed: asBoolean(row.rehostAllowed) }));
+  async listAssets(params: AssetFilters = {}): Promise<Asset[]> {
+    const conditions = ["a.deleted_at IS NULL"];
+    const values: unknown[] = [];
+    if (params.collection) { conditions.push("(a.collection_id = ? OR c.slug = ?)"); values.push(params.collection, params.collection); }
+    if (params.source) { conditions.push("(',' || a.source_ids || ',') LIKE ?"); values.push(`%,${params.source},%`); }
+    if (params.coverageType) { conditions.push("COALESCE(a.coverage_type_label, a.coverage_type) = ?"); values.push(params.coverageType); }
+    if (params.mediaType) { conditions.push("a.asset_kind = ?"); values.push(params.mediaType); }
+    const query = `SELECT a.id, a.collection_id AS collectionId, a.title, a.source_page_url AS sourcePageUrl, a.remote_url AS remoteUrl, a.embed_url AS embedUrl, a.provider, a.provider_asset_id AS providerAssetId, a.thumbnail_url AS thumbnailUrl, a.alternative_urls AS alternativeUrls, a.creator, a.photographer, a.credit_line AS creditLine, a.source_ids AS sourceIds, a.rights_status AS rightsStatus, a.download_policy AS downloadPolicy, a.display_mode AS displayMode, a.local_path AS localPath, a.cache_url AS cacheUrl, a.canonical_status AS canonicalStatus, a.asset_kind AS assetKind, COALESCE(a.coverage_type_label, a.coverage_type) AS coverageType, a.coverage_scope AS coverageScope, a.copyright_holder AS copyrightHolder, a.license_name AS licenseName, a.license_url AS licenseUrl, a.attribution_required AS attributionRequired, a.embed_allowed AS embedAllowed, a.remote_render_allowed AS remoteRenderAllowed, a.rehost_allowed AS rehostAllowed, a.verified_at AS verifiedAt, a.sequence_number AS sequenceNumber, a.look_number AS lookNumber, a.canonical_url AS canonicalUrl, a.channel_name AS channelName, a.duration_seconds AS durationSeconds, a.published_at AS publishedAt, a.video_type AS videoType, a.completeness, a.officiality FROM assets a LEFT JOIN collections c ON c.id = a.collection_id WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(a.sequence_number, 999999), a.id`;
+    const { results } = await this.db.prepare(query).bind(...values).all<AssetRow>();
+    return results.map((row) => {
+      const sourceIds = listIds(row.sourceIds);
+      return { ...row, sourceIds, ...(sourceIds[0] ? { sourceId: sourceIds[0] } : {}), alternativeUrls: listIds(row.alternativeUrls), attributionRequired: asBoolean(row.attributionRequired), embedAllowed: asBoolean(row.embedAllowed), remoteRenderAllowed: asBoolean(row.remoteRenderAllowed), rehostAllowed: asBoolean(row.rehostAllowed) };
+    });
   }
   async getCollectionBySlug(slug: string): Promise<CollectionDetail | null> {
     const collection = (await this.listCollections()).find((item) => item.slug === slug);
@@ -90,6 +107,24 @@ export class D1CatalogRepository implements CatalogRepository {
     const edition = editions.find((item) => item.id === collection.editionId);
     const event = edition ? events.find((item) => item.id === edition.eventId) : undefined;
     const city = edition ? cities.find((item) => item.id === edition.cityHubId) : undefined;
+    const collectionAssets = assets.filter((item) => item.collectionId === collection.id);
+    const collectionSources = sources.filter((item) => collection.sourceIds.includes(item.id));
+    const imageGroups = new Map<string, ImageGroup>();
+    for (const asset of collectionAssets.filter((item) => item.assetKind !== "VIDEO")) {
+      const coverageType = asset.coverageType ?? "UNKNOWN";
+      for (const sourceId of asset.sourceIds) {
+        const key = `${sourceId}:${coverageType}`;
+        const existing = imageGroups.get(key);
+        if (existing) {
+          existing.assets.push(asset);
+          continue;
+        }
+        const group: ImageGroup = { sourceId, coverageType, assets: [asset] };
+        const source = collectionSources.find((item) => item.id === sourceId);
+        if (source) group.source = source;
+        imageGroups.set(key, group);
+      }
+    }
     return {
       collection,
       maison,
@@ -97,8 +132,10 @@ export class D1CatalogRepository implements CatalogRepository {
       ...(event ? { event } : {}),
       ...(city ? { city } : {}),
       schedule: schedule.filter((item) => item.editionId === collection.editionId),
-      assets: assets.filter((item) => item.collectionId === collection.id),
-      sources: sources.filter((item) => collection.sourceIds.includes(item.id)),
+      assets: collectionAssets,
+      imageGroups: Array.from(imageGroups.values()),
+      videos: collectionAssets.filter((item) => item.assetKind === "VIDEO"),
+      sources: collectionSources,
       reviews: reviews.filter((item) => item.collectionId === collection.id),
       tags
     };
@@ -120,7 +157,7 @@ export class D1CatalogRepository implements CatalogRepository {
     return results.map((row) => ({ ...row, language: row.language.split(","), coverageScope: row.coverageScope.split(","), active: asBoolean(row.active) }));
   }
   async listReviews(): Promise<ProfessionalReview[]> {
-    const { results } = await this.db.prepare("SELECT id, collection_id AS collectionId, source_id AS sourceId, title, url, published_at AS publishedAt, language, canonical_status AS canonicalStatus FROM professional_reviews ORDER BY published_at DESC").all<ProfessionalReview>();
+    const { results } = await this.db.prepare("SELECT id, collection_id AS collectionId, source_id AS sourceId, title, url, published_at AS publishedAt, language, canonical_status AS canonicalStatus, author, publication, summary FROM professional_reviews ORDER BY published_at DESC").all<ProfessionalReview>();
     return results;
   }
   async listTerms(): Promise<Term[]> {

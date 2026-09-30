@@ -1,4 +1,5 @@
 import { D1CatalogRepository } from "@nex-plus/data";
+import type { AssetFilters } from "@nex-plus/data";
 import { getHappeningNow, getScheduleState, getUpcoming } from "@nex-plus/core";
 import type { APIError, APIListResponse, APISingleResponse, CollectionDetail, HealthResponse, HomeResponse, MaisonDetail, ScheduleEntry } from "@nex-plus/types";
 import type { WorkerEnv } from "./env.js";
@@ -93,7 +94,13 @@ export default {
         }
         case "/api/maisons": return listResponse(await repository.listMaisons());
         case "/api/collections": return listResponse(await repository.listCollections());
-        case "/api/assets": return listResponse(await repository.listAssets());
+        case "/api/assets": {
+          const collection = url.searchParams.get("collection") ?? undefined;
+          const source = url.searchParams.get("source") ?? undefined;
+          const coverageType = url.searchParams.get("coverageType") as AssetFilters["coverageType"] | undefined;
+          const mediaType = url.searchParams.get("mediaType") as AssetFilters["mediaType"] | undefined;
+          return listResponse(await repository.listAssets({ ...(collection ? { collection } : {}), ...(source ? { source } : {}), ...(coverageType ? { coverageType } : {}), ...(mediaType ? { mediaType } : {}) }));
+        }
         case "/api/sources": return listResponse(await repository.listSources());
         case "/api/search": {
           const query = url.searchParams.get("q")?.trim() ?? "";
