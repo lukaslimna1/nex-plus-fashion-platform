@@ -344,9 +344,11 @@ export class D1CatalogRepository implements CatalogRepository {
   async getTermBySlug(slug: string): Promise<TermDetail | null> {
     const term = (await this.listTerms()).find((item) => item.slug === slug);
     if (!term) return null;
-    const [sources, terms] = await Promise.all([this.listSources(), this.listTerms()]);
+    const [sources, terms, collections] = await Promise.all([this.listSources(), this.listTerms(), this.listCollections()]);
     const relatedIds = new Set(term.relatedTermIds);
-    return { term, sources: sources.filter((source) => term.sourceIds.includes(source.id)), relatedTerms: terms.filter((candidate) => relatedIds.has(candidate.id)), collections: [] };
+    const collectionRows = await this.db.prepare("SELECT collection_id AS collectionId FROM term_collections WHERE term_id = ? ORDER BY collection_id").bind(term.id).all<{ collectionId: string }>();
+    const collectionIds = new Set(collectionRows.results.map((row) => row.collectionId));
+    return { term, sources: sources.filter((source) => term.sourceIds.includes(source.id)), relatedTerms: terms.filter((candidate) => relatedIds.has(candidate.id)), collections: collections.filter((collection) => collectionIds.has(collection.id)) };
   }
   async listTags(): Promise<Tag[]> {
     const { results } = await this.db.prepare("SELECT id, value, slug, source_ids AS sourceIds FROM tags ORDER BY value").all<Omit<Tag, "sourceIds"> & { sourceIds: string }>();
@@ -363,7 +365,9 @@ export class D1CatalogRepository implements CatalogRepository {
     const evidence = await this.db.prepare("SELECT collection_id AS collectionId, asset_id AS assetId FROM trend_evidence WHERE trend_id = ? ORDER BY ordinal").bind(trend.id).all<{ collectionId?: string; assetId?: string }>();
     const collectionIds = new Set(evidence.results.flatMap((row) => row.collectionId ? [row.collectionId] : []));
     const assetIds = new Set(evidence.results.flatMap((row) => row.assetId ? [row.assetId] : []));
-    return { trend, collections: collections.filter((item) => collectionIds.has(item.id)), looks: assets.filter((item) => assetIds.has(item.id)), sources: sources.filter((source) => trend.sourceIds.includes(source.id)), relatedTerms: [] };
+    const relatedTermRows = collectionIds.size > 0 ? await this.db.prepare(`SELECT DISTINCT term_id AS termId FROM term_collections WHERE collection_id IN (${Array.from(collectionIds, () => "?").join(",")})`).bind(...Array.from(collectionIds)).all<{ termId: string }>() : { results: [] };
+    const relatedTermIds = new Set(relatedTermRows.results.map((row) => row.termId));
+    return { trend, collections: collections.filter((item) => collectionIds.has(item.id)), looks: assets.filter((item) => assetIds.has(item.id)), sources: sources.filter((source) => trend.sourceIds.includes(source.id)), relatedTerms: terms.filter((term) => relatedTermIds.has(term.id)) };
   }
   async search(query: string): Promise<SearchResult[]> {
     const needle = `%${query.trim().replace(/[%_]/g, "\\$&").slice(0, 120)}%`;
