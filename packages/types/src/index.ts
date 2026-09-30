@@ -1,0 +1,130 @@
+export type Id = string;
+export type ISODateTime = string;
+export type CivilDate = `${number}-${number}-${number}`;
+
+export type AuthorityTier = "A" | "B" | "C" | "D";
+export type SourceType =
+  | "OFFICIAL_ORGANIZER"
+  | "MAISON_OFFICIAL"
+  | "RUNWAY_COVERAGE"
+  | "REVIEW_PUBLICATION"
+  | "VIDEO_CHANNEL"
+  | "MUSEUM_ARCHIVE"
+  | "ACADEMIC"
+  | "VOCABULARY"
+  | "OTHER";
+export type AccessMode = "PUBLIC" | "LOGIN_REQUIRED" | "PAYWALL" | "API" | "EMBED" | "UNKNOWN";
+export type RightsStatus = "CLEARED" | "RESTRICTED" | "UNKNOWN" | "NOT_APPLICABLE";
+export type DownloadPolicy = "DOWNLOAD_ALLOWED" | "DOWNLOAD_BLOCKED" | "DOWNLOAD_UNKNOWN";
+export type DisplayMode = "INLINE" | "EMBED" | "LINK_ONLY" | "THUMBNAIL_ONLY" | "PLACEHOLDER";
+export type CanonicalStatus = "DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED" | "CANONICAL";
+export type AIOutputStatus = "AI_DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED";
+export type ScheduleVerificationStatus = "VERIFIED" | "UNVERIFIED" | "CANCELLED" | "UNKNOWN";
+export type ScheduleState = "UPCOMING" | "SOON" | "NOW" | "ENDED" | "UNKNOWN";
+
+export interface Region {
+  id: Id; name: string; slug: string;
+}
+export interface Country {
+  id: Id; regionId: Id; name: string; isoCode: string; slug: string;
+}
+export interface AdministrativeArea {
+  id: Id; countryId: Id; name: string; slug: string;
+}
+export interface CityHub {
+  id: Id; name: string; slug: string; countryId: Id; regionId: Id;
+  administrativeAreaId?: Id; timezone: string; latitude?: number; longitude?: number;
+}
+export interface Event {
+  id: Id; name: string; slug: string; kind: "FASHION_WEEK" | "HAUTE_COUTURE_WEEK" | "OTHER";
+  officialUrl?: string;
+}
+export interface EventLocation {
+  eventId: Id; cityHubId: Id; venueName?: string; address?: string; sourceId?: Id;
+}
+export interface Segment {
+  id: Id; name: string; code: string;
+}
+export interface EventSegment { eventId: Id; segmentId: Id; }
+export interface Edition {
+  id: Id; eventId: Id; segmentId?: Id; cityHubId?: Id;
+  calendarYear: number; seasonYear: number; seasonCode: string; seasonLabel: string;
+  startsOn?: CivilDate; endsOn?: CivilDate; status: CanonicalStatus;
+}
+export interface ScheduleEntry {
+  id: Id; editionId: Id; eventId: Id; segmentId?: Id; cityHubId: Id;
+  title: string; format: "SHOW" | "PRESENTATION" | "FILM" | "OTHER";
+  startTime: ISODateTime; endTime?: ISODateTime | undefined; timezone: string;
+  verificationStatus: ScheduleVerificationStatus; officialUrl?: string; livestreamUrl?: string;
+  sourceIds: Id[]; state?: ScheduleState;
+}
+export interface Maison {
+  id: Id; name: string; slug: string; websiteUrl?: string; foundedYear?: number;
+  artisticDirection?: string; officialSourceIds: Id[];
+}
+export interface CreativeDirectionHistory {
+  id: Id; maisonId: Id; personOrTeam: string; startsOn?: CivilDate; endsOn?: CivilDate; sourceIds: Id[];
+}
+export interface Collection {
+  id: Id; maisonId: Id; editionId: Id; name: string; slug: string;
+  calendarYear: number; seasonYear: number; seasonCode: string; seasonLabel: string;
+  presentedOn?: CivilDate; canonicalStatus: CanonicalStatus; sourceIds: Id[];
+}
+export interface Source {
+  id: Id; canonicalName: string; type: SourceType; baseUrl: string;
+  authorityTier: AuthorityTier; language: string[]; coverageScope: string[];
+  regionId?: Id; countryId?: Id; accessMode: AccessMode; rightsNotes?: string;
+  automationNotes?: string; lastVerifiedAt?: ISODateTime; active: boolean;
+}
+export interface Asset {
+  id: Id; collectionId?: Id; title?: string; sourcePageUrl: string; remoteUrl?: string;
+  embedUrl?: string; provider?: string; providerAssetId?: string; thumbnailUrl?: string;
+  alternativeUrls: string[]; creator?: string; photographer?: string; creditLine?: string;
+  sourceIds: Id[]; rightsStatus: RightsStatus; downloadPolicy: DownloadPolicy;
+  displayMode: DisplayMode; localPath?: string; cacheUrl?: string; canonicalStatus: CanonicalStatus;
+}
+export interface AssetSource { assetId: Id; sourceId: Id; contribution: string; checkedAt: ISODateTime; }
+export interface ProfessionalReview {
+  id: Id; collectionId?: Id; sourceId: Id; title: string; url: string;
+  publishedAt?: ISODateTime; language: string; canonicalStatus: CanonicalStatus;
+}
+export interface Term { id: Id; value: string; language: string; definition?: string; sourceIds: Id[]; }
+export interface Tag { id: Id; value: string; slug: string; sourceIds: Id[]; }
+export interface CollectionTag { collectionId: Id; tagId: Id; evidence?: string; }
+export interface AssetTag { assetId: Id; tagId: Id; evidence?: string; }
+export interface LookTag { assetId: Id; tagId: Id; lookNumber?: number; }
+export interface Favorite { id: Id; identityId: string; targetType: "COLLECTION" | "ASSET" | "MAISON"; targetId: Id; createdAt: ISODateTime; }
+export interface CommunityReaction { id: Id; identityKey: string; targetType: "COLLECTION" | "ASSET"; targetId: Id; reaction: string; createdAt: ISODateTime; }
+export interface CommunityTag { id: Id; identityKey: string; targetType: "COLLECTION" | "ASSET"; targetId: Id; tagId: Id; createdAt: ISODateTime; }
+export interface SyncRecord { entityType: string; entityId: Id; revision: number; updatedAt: ISODateTime; deletedAt?: ISODateTime; }
+export interface SyncTombstone { entityType: string; entityId: Id; revision: number; deletedAt: ISODateTime; }
+
+export type AITask =
+  | "extractCalendar" | "extractScheduleEntries" | "extractCollectionMetadata" | "extractMaisonMetadata" | "extractEventMetadata"
+  | "normalizeNames" | "normalizeSeason" | "normalizeCredits" | "translateToPtBr"
+  | "summarizePressRelease" | "summarizeProfessionalReview" | "detectSourceChanges"
+  | "suggestTags" | "suggestTerms" | "suggestTrendEvidence" | "extractImageMetadata" | "extractVideoMetadata";
+
+export interface AIRequest { task: AITask; input: string; inputSourceIds: Id[]; schemaVersion: string; }
+export interface AIEnvelope<T> {
+  provider: string; model: string; generatedAt: ISODateTime; inputSourceIds: Id[];
+  confidence?: number; schemaVersion: string; status: AIOutputStatus; data: T;
+}
+export interface ScheduleExtraction { entries: Array<Pick<ScheduleEntry, "title" | "format" | "startTime" | "endTime" | "timezone" | "officialUrl">>; }
+export interface CollectionExtraction { name: string; maisonName: string; seasonCode: string; seasonYear: number; seasonLabel: string; presentedOn?: CivilDate; sourceNotes?: string; }
+export interface MaisonExtraction { name: string; artisticDirection?: string; foundedYear?: number; websiteUrl?: string; }
+export interface EventExtraction { name: string; kind: Event["kind"]; officialUrl?: string; }
+
+export interface APIListResponse<T> { data: T[]; meta: { count: number; generatedAt: ISODateTime; revision: number; }; }
+export interface APIError { error: { code: string; message: string; }; }
+export interface HealthResponse {
+  status: "ok" | "degraded"; environment: string; version: string; commit?: string;
+  database: { reachable: boolean }; aiProviders: { geminiConfigured: boolean; workersAIConfigured: boolean };
+}
+
+export interface GoogleIdentity { issuer: "https://accounts.google.com"; subject: string; email?: string; }
+export interface PseudonymousIdentity { identityKey: string; provider: "GOOGLE_OIDC"; }
+export interface GoogleDriveAppDataAdapter {
+  list(scope: "favorites" | "preferences" | "settings" | "reading-state"): Promise<unknown[]>;
+  put(scope: "favorites" | "preferences" | "settings" | "reading-state", value: unknown): Promise<void>;
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nex-plus-fashion",
+  "main": "apps/worker/src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "assets": {
+    "directory": "apps/web/dist",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nex-plus-fashion",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "APP_ENV": "local",
+    "WORKER_VERSION": "0.1.0"
+  },
+  "env": {
+    "preview": {
+      "name": "nex-plus-fashion-preview",
+      "vars": {
+        "APP_ENV": "preview",
+        "WORKER_VERSION": "0.1.0"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "nex-plus-fashion",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "ai": { "binding": "AI" }
+    },
+    "production": {
+      "name": "nex-plus-fashion",
+      "vars": {
+        "APP_ENV": "production",
+        "WORKER_VERSION": "0.1.0"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "nex-plus-fashion",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "ai": { "binding": "AI" }
+    }
+  }
+}

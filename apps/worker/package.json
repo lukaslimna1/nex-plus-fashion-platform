@@ -1,0 +1,8 @@
+{
+  "name": "@nex-plus/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../scripts/ensure-static-assets.mjs && wrangler deploy --dry-run --env=\"\""
+  }
+}

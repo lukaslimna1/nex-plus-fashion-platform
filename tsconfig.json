@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@nex-plus/types": ["./packages/types/src/index.ts"],
+      "@nex-plus/core": ["./packages/core/src/index.ts"],
+      "@nex-plus/data": ["./packages/data/src/index.ts"],
+      "@nex-plus/media": ["./packages/media/src/index.ts"]
+    }
+  },
+  "include": ["packages/**/*.ts", "apps/worker/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

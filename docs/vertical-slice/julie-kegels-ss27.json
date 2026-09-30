@@ -1,0 +1,44 @@
+{
+  "collection": {
+    "id": "collection-julie-kegels-ss27-2026",
+    "name": "Julie Kegels — Womenswear Spring/Summer 2027",
+    "maison": "Julie Kegels",
+    "calendarYear": 2026,
+    "seasonYear": 2027,
+    "seasonCode": "SS27",
+    "seasonLabel": "Spring/Summer 2027",
+    "presentedOn": "2026-09-28",
+    "canonicalStatus": "CANONICAL"
+  },
+  "schedule": {
+    "id": "schedule-julie-kegels-ss27-2026-09-28",
+    "title": "Julie Kegels",
+    "format": "SHOW",
+    "startTime": "2026-09-28T12:30:00.000Z",
+    "timezone": "Europe/Paris",
+    "verificationStatus": "VERIFIED",
+    "sourcePageUrl": "https://www.fhcm.paris/en/paris-fashion-week/calendar"
+  },
+  "sources": [
+    {
+      "id": "source-fhcm",
+      "canonicalName": "Fédération de la Haute Couture et de la Mode (FHCM)",
+      "type": "OFFICIAL_ORGANIZER",
+      "authorityTier": "A",
+      "urls": [
+        "https://www.fhcm.paris/en/paris-fashion-week",
+        "https://www.fhcm.paris/en/paris-fashion-week/calendar",
+        "https://www.fhcm.paris/en/paris-fashion-week/collections",
+        "https://www.fhcm.paris/en/house/julie-kegels"
+      ],
+      "contributions": ["event", "edition", "calendar", "maison", "collection"]
+    }
+  ],
+  "media": {
+    "assets": [],
+    "status": "PENDING_SOURCE_VERIFICATION",
+    "note": "The official FHCM pages verified for this slice expose the SS27 collection and schedule, but no directly reusable SS27 photo or official video/embed URL was verified during ingestion. No third-party media was copied or presented as owned content.",
+    "nextStep": "Re-check the official collection page or an explicitly credited coverage source before adding remoteUrl/embedUrl, rightsStatus, downloadPolicy, creator and creditLine."
+  },
+  "pipeline": ["SOURCE_REAL", "SCRAPER", "NORMALIZATION", "VALIDATION", "DATABASE", "API", "JSON_FINAL"]
+}
