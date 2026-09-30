@@ -14,4 +14,7 @@ Thumbs.db
 tmp/
 .cache/
 wrangler.toml.local
+.wrangler/
 .dev.vars
+*.local
+*.tsbuildinfo

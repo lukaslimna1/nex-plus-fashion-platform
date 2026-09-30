@@ -1,0 +1,9 @@
+{
+  "name": "@nex-plus/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build"
+  }
+}

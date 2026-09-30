@@ -1,0 +1,7 @@
+{
+  "name": "@nex-plus/core",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@nex-plus/types": "file:../types" }
+}
