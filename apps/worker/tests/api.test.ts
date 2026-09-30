@@ -71,4 +71,31 @@ describe("Worker API contract", () => {
     expect(maisonResponse.status).toBe(200);
     expect(await maisonResponse.json()).toMatchObject({ data: { maison: { slug: "verified-maison" }, collections: [{ slug: "verified-collection" }] } });
   });
+
+  it("passes route catalog filters without truncating the data source", async () => {
+    const queries: string[] = [];
+    const db = {
+      prepare(query: string) {
+        queries.push(query);
+        return {
+          bind(...values: unknown[]) { void values; return this; },
+          async first() { return { ok: 1 }; },
+          async all() {
+            if (query.includes("FROM city_hubs")) return { results: [{ id: "city-paris", name: "Paris", slug: "paris", countryId: "country-france", regionId: "region-europe", countryName: "França", regionName: "Europa", aliases: "[]", relatedEventIds: "event-paris-fashion-week", complementarySourceIds: "", coverAssetKey: "cover-city-paris", coverUrl: "/assets/covers/cities/cover-city-paris.png", coverMatchStatus: "MATCHED", coverFallback: 0, researchStatus: "COMPLETE", importStatus: "UNCHANGED" }] };
+            if (query.includes("FROM events")) return { results: [{ id: "event-paris-fashion-week", name: "Paris Fashion Week", slug: "paris-fashion-week", kind: "FASHION_WEEK", eventType: "Fashion Week", aliases: "[]", cityHubIds: "city-paris", socials: "{}", complementarySourceIds: "", coverAssetKey: "cover-event-paris-fashion-week", coverUrl: "/assets/covers/events/cover-event-paris-fashion-week.png", coverMatchStatus: "MATCHED", coverFallback: 0, researchStatus: "COMPLETE", importStatus: "UNCHANGED" }] };
+            return { results: [] };
+          },
+          async run() { return { success: true }; }
+        };
+      }
+    } as never;
+    const cities = await worker.fetch(new Request("https://example.test/api/cities?region=europa&country=franca&status=COMPLETE&hasCover=true"), { DB: db, APP_ENV: "test" });
+    expect(cities.status).toBe(200);
+    expect(await cities.json()).toMatchObject({ data: [{ slug: "paris", cover: { assetKey: "cover-city-paris", fallback: false } }] });
+    const events = await worker.fetch(new Request("https://example.test/api/events?status=COMPLETE&type=Fashion%20Week&city=paris&hasCover=true"), { DB: db, APP_ENV: "test" });
+    expect(events.status).toBe(200);
+    expect(await events.json()).toMatchObject({ data: [{ slug: "paris-fashion-week", cityHubIds: ["city-paris"], cover: { fallback: false } }] });
+    expect(queries.some((query) => query.includes("r.slug = ?") && query.includes("h.cover_fallback = ?"))).toBe(true);
+    expect(queries.some((query) => query.includes("EXISTS (SELECT 1 FROM event_locations") && query.includes("e.event_type = ?") && query.includes("e.cover_fallback = ?"))).toBe(true);
+  });
 });

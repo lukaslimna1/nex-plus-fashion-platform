@@ -1,5 +1,5 @@
 import { D1CatalogRepository } from "@nex-plus/data";
-import type { AssetFilters } from "@nex-plus/data";
+import type { AssetFilters, CityFilters, EventFilters } from "@nex-plus/data";
 import { getHappeningNow, getScheduleState, getUpcoming } from "@nex-plus/core";
 import type { APIError, APIListResponse, APISingleResponse, CollectionDetail, HealthResponse, HomeResponse, MaisonDetail, ScheduleEntry } from "@nex-plus/types";
 import type { WorkerEnv } from "./env.js";
@@ -73,8 +73,26 @@ export default {
         case "/api/home": return singleResponse<HomeResponse>(homeResponse(await buildHome(repository)));
         case "/api/regions": return listResponse(await repository.listRegions());
         case "/api/countries": return listResponse(await repository.listCountries());
-        case "/api/cities": return listResponse(await repository.listCities());
-        case "/api/events": return listResponse(await repository.listEvents());
+        case "/api/cities": {
+          const hasCover = url.searchParams.get("hasCover");
+          const params: CityFilters = {
+            ...(url.searchParams.get("region") ? { region: url.searchParams.get("region")! } : {}),
+            ...(url.searchParams.get("country") ? { country: url.searchParams.get("country")! } : {}),
+            ...(url.searchParams.get("status") ? { status: url.searchParams.get("status")! } : {}),
+            ...(hasCover === "true" || hasCover === "1" ? { hasCover: true } : hasCover === "false" || hasCover === "0" ? { hasCover: false } : {})
+          };
+          return listResponse(await repository.listCities(params));
+        }
+        case "/api/events": {
+          const hasCover = url.searchParams.get("hasCover");
+          const params: EventFilters = {
+            ...(url.searchParams.get("status") ? { status: url.searchParams.get("status")! } : {}),
+            ...(url.searchParams.get("type") ? { type: url.searchParams.get("type")! } : {}),
+            ...(url.searchParams.get("city") ? { city: url.searchParams.get("city")! } : {}),
+            ...(hasCover === "true" || hasCover === "1" ? { hasCover: true } : hasCover === "false" || hasCover === "0" ? { hasCover: false } : {})
+          };
+          return listResponse(await repository.listEvents(params));
+        }
         case "/api/editions": return listResponse(await repository.listEditions());
         case "/api/schedule": {
           const from = url.searchParams.get("from");
