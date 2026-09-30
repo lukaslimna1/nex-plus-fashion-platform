@@ -19,6 +19,7 @@ export type DownloadPolicy = "DOWNLOAD_ALLOWED" | "DOWNLOAD_BLOCKED" | "DOWNLOAD
 export type DisplayMode = "INLINE" | "EMBED" | "LINK_ONLY" | "THUMBNAIL_ONLY" | "PLACEHOLDER";
 export type AssetKind = "IMAGE" | "VIDEO";
 export type CoverageType = "RUNWAY" | "PRESENTATION" | "DETAILS" | "EDITORIAL" | "EXTRAS";
+export type AssetCoverageScope = "LOOKBOOK_IMAGE" | "RUNWAY_COVERAGE_REEL" | "FULL_COLLECTION" | "DETAIL" | "EDITORIAL" | "UNKNOWN";
 export type CanonicalStatus = "DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED" | "CANONICAL";
 export type AIOutputStatus = "AI_DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED";
 export type ScheduleVerificationStatus = "VERIFIED" | "UNVERIFIED" | "CANCELLED" | "UNKNOWN";
@@ -84,10 +85,10 @@ export interface Asset {
   alternativeUrls: string[]; creator?: string; photographer?: string; creditLine?: string;
   sourceIds: Id[]; rightsStatus: RightsStatus; downloadPolicy: DownloadPolicy;
   displayMode: DisplayMode; localPath?: string; cacheUrl?: string; canonicalStatus: CanonicalStatus;
-  assetKind?: AssetKind; coverageType?: CoverageType; copyrightHolder?: string;
+  assetKind?: AssetKind; coverageType?: CoverageType; coverageScope?: AssetCoverageScope; copyrightHolder?: string;
   licenseName?: string; licenseUrl?: string; attributionRequired?: boolean;
   embedAllowed?: boolean; remoteRenderAllowed?: boolean; rehostAllowed?: boolean;
-  verifiedAt?: ISODateTime;
+  verifiedAt?: ISODateTime; sequenceNumber?: number;
 }
 export interface AssetSource { assetId: Id; sourceId: Id; contribution: string; checkedAt: ISODateTime; }
 export interface ProfessionalReview {

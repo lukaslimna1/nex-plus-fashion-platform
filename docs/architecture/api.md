@@ -22,4 +22,4 @@ All fields below are typed in `@nex-plus/types`. The collection, maison, event a
 - `GET /api/cities` returns `CityHub[]`; `GET /api/events` returns `Event[]`.
 - `GET /api/schedule/now` and `/api/schedule/upcoming` return `ScheduleEntry[]` with computed `state`.
 
-The shared contracts also cover `Edition`, `Asset`, `Source`, `ProfessionalReview`, `Term` and `Tag`. `Asset` keeps `remoteUrl`, `alternativeUrls`, `thumbnailUrl`, `sourcePageUrl`, `provider`, `providerAssetId`, credit fields, rights/download policy and media-kind flags. Third-party media is URL/embed-only by default; no endpoint implies permission to download or rehost.
+The shared contracts also cover `Edition`, `Asset`, `Source`, `ProfessionalReview`, `Term` and `Tag`. `Asset` keeps `sequenceNumber`, `remoteUrl`, `alternativeUrls`, `thumbnailUrl`, `sourcePageUrl`, `provider`, `providerAssetId`, credit fields, rights/download policy, media-kind flags and `coverageScope`. A reel uses `RUNWAY_COVERAGE_REEL`; it must not be presented as a complete show unless a source proves that scope. Third-party media is URL/embed-only by default; no endpoint implies permission to download or rehost.
