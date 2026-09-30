@@ -9,7 +9,7 @@ if (!apiKey) {
 
 const started = performance.now();
 try {
-  const provider = new GeminiAIProvider(apiKey, process.env.GEMINI_MODEL || "gemini-2.5-flash");
+  const provider = new GeminiAIProvider(apiKey, process.env.GEMINI_MODEL || "gemini-3.8-flash");
   const collectionResult = await provider.extractStructuredData({
     task: "extractCollectionMetadata",
     input: "Return JSON only: {name:'Julie Kegels Womenswear Spring/Summer 2027', maisonName:'Julie Kegels', seasonCode:'SS27', seasonYear:2027, seasonLabel:'Spring/Summer 2027', presentedOn:'2026-09-28'}",

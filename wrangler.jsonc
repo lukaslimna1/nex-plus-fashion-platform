@@ -20,14 +20,18 @@
   },
   "vars": {
     "APP_ENV": "local",
-    "WORKER_VERSION": "0.1.0"
+    "WORKER_VERSION": "0.1.0",
+    "CORS_ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173",
+    "GEMINI_MODEL": "gemini-3.8-flash"
   },
   "env": {
     "preview": {
       "name": "nex-plus-fashion-preview",
       "vars": {
         "APP_ENV": "preview",
-        "WORKER_VERSION": "0.1.0"
+        "WORKER_VERSION": "0.1.0",
+        "CORS_ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173",
+        "GEMINI_MODEL": "gemini-3.8-flash"
       },
       "d1_databases": [
         {
@@ -43,7 +47,9 @@
       "name": "nex-plus-fashion",
       "vars": {
         "APP_ENV": "production",
-        "WORKER_VERSION": "0.1.0"
+        "WORKER_VERSION": "0.1.0",
+        "CORS_ALLOWED_ORIGINS": "",
+        "GEMINI_MODEL": "gemini-3.8-flash"
       },
       "d1_databases": [
         {

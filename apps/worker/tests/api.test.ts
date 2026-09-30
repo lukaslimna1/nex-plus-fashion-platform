@@ -45,6 +45,14 @@ describe("Worker API contract", () => {
     expect(body).not.toHaveProperty("GEMINI_API_KEY");
     expect(body).toMatchObject({ status: "ok", environment: "test", database: { reachable: true }, aiProviders: { geminiConfigured: true } });
   });
+  it("allows configured frontend origins without using wildcard CORS", async () => {
+    const allowed = await worker.fetch(new Request("https://example.test/api/health", { headers: { Origin: "https://frontend.example" } }), { DB: fakeDb(), APP_ENV: "production", CORS_ALLOWED_ORIGINS: "https://frontend.example" });
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://frontend.example");
+    expect(allowed.headers.get("vary")).toContain("Origin");
+
+    const blocked = await worker.fetch(new Request("https://example.test/api/health", { headers: { Origin: "https://untrusted.example" } }), { DB: fakeDb(), APP_ENV: "production", CORS_ALLOWED_ORIGINS: "https://frontend.example" });
+    expect(blocked.headers.get("access-control-allow-origin")).toBeNull();
+  });
   it("returns frontend-ready list envelopes", async () => {
     const response = await worker.fetch(new Request("https://example.test/api/collections"), { DB: fakeDb(), APP_ENV: "test" });
     expect(await response.json()).toMatchObject({ data: [{ id: "c-1", seasonCode: "SS27" }], meta: { count: 1, revision: 1 } });

@@ -8,6 +8,7 @@ export interface WorkerEnv {
   APP_ENV?: string;
   WORKER_VERSION?: string;
   GIT_COMMIT?: string;
+  CORS_ALLOWED_ORIGINS?: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
 }

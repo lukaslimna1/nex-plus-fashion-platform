@@ -4,7 +4,7 @@ import type { AIProvider } from "@nex-plus/core";
 
 export class GeminiAIProvider implements AIProvider {
   public readonly name = "gemini";
-  public constructor(private readonly apiKey: string, public readonly model: string = "gemini-2.5-flash") {}
+  public constructor(private readonly apiKey: string, public readonly model: string = "gemini-3.8-flash") {}
 
   async extractStructuredData<T>(request: AIRequest): Promise<AIEnvelope<T>> {
     const client = new GoogleGenAI({ apiKey: this.apiKey });

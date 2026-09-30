@@ -12,7 +12,7 @@ The Web workstream owns the React/Vite entrypoint and must add `@cloudflare/vite
 - `AI`: Workers AI secondary provider binding.
 - `ASSETS`: implicit Workers Static Assets fetcher for `apps/web/dist`.
 
-The D1 `database_id` is intentionally absent until Wrangler authentication and account selection are verified. Never put account credentials or API keys in `wrangler.jsonc`.
+The D1 `database_id` is configured in `wrangler.jsonc` after account verification. Never put account credentials or API keys in `wrangler.jsonc`; `GEMINI_API_KEY` is a Worker secret.
 
 ## Commands
 
@@ -24,7 +24,9 @@ npm run build
 npm run deploy:preview
 ```
 
-`npm run deploy` is prepared but must only be run after explicit production authorization. A public deployment was not performed in this delivery.
+`npm run deploy` publishes the authorized production Worker. The current public API base URL is documented in `docs/API-HANDOFF.md`.
+
+Production uses same-origin API access for the Worker-served Web/PWA. `CORS_ALLOWED_ORIGINS` is empty in production; local and preview environments allow the configured Vite localhost origins. A separate frontend origin must be added explicitly before it is consumed cross-origin.
 
 ## Native caching
 
