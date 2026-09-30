@@ -16,7 +16,8 @@ export class GeminiAIProvider implements AIProvider {
     const text = response.text?.trim() ?? "";
     if (!text) throw new Error("Gemini returned an empty response");
     const data = JSON.parse(text) as T;
-    return { provider: this.name, model: this.model, generatedAt: new Date().toISOString(), inputSourceIds: request.inputSourceIds, schemaVersion: request.schemaVersion, status: "AI_DRAFT", data };
+    const timestamp = new Date().toISOString();
+    return { provider: this.name, model: this.model, generatedAt: timestamp, timestamp, fallbackUsed: false, attempts: 1, inputSourceIds: request.inputSourceIds, schemaVersion: request.schemaVersion, status: "AI_DRAFT", data };
   }
   translate(request: AIRequest): Promise<AIEnvelope<{ text: string }>> { return this.extractStructuredData<{ text: string }>(request); }
   summarize(request: AIRequest): Promise<AIEnvelope<{ text: string }>> { return this.extractStructuredData<{ text: string }>(request); }

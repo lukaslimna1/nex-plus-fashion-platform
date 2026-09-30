@@ -99,7 +99,8 @@ export interface ScheduleEntry {
   id: Id; editionId: Id; eventId: Id; segmentId?: Id; cityHubId: Id;
   title: string; format: "SHOW" | "PRESENTATION" | "FILM" | "OTHER";
   startTime: ISODateTime; endTime?: ISODateTime | undefined; timezone: string;
-  verificationStatus: ScheduleVerificationStatus; officialUrl?: string; livestreamUrl?: string;
+  verificationStatus: ScheduleVerificationStatus; officialUrl?: string; sourcePageUrl?: string; livestreamUrl?: string;
+  venueName?: string; verifiedAt?: ISODateTime;
   sourceIds: Id[]; state?: ScheduleState;
 }
 export interface Maison {
@@ -153,7 +154,12 @@ export interface ProfessionalReview {
   publishedAt?: ISODateTime; language: string; canonicalStatus: CanonicalStatus;
   author?: string; publication?: string; summary?: string;
 }
-export interface Term { id: Id; value: string; language: string; definition?: string; sourceIds: Id[]; }
+export interface Term {
+  id: Id; value: string; language: string; definition?: string; sourceIds: Id[];
+  slug?: string; canonicalName?: string; ptBrName?: string; internationalName?: string;
+  aliases: string[]; context?: string; category?: string; externalUri?: string;
+  relatedTermIds: Id[]; examples: Array<Record<string, unknown>>; retrievedAt?: ISODateTime;
+}
 export interface Tag { id: Id; value: string; slug: string; sourceIds: Id[]; }
 export interface CollectionTag { collectionId: Id; tagId: Id; evidence?: string; }
 export interface AssetTag { assetId: Id; tagId: Id; evidence?: string; }
@@ -172,7 +178,8 @@ export type AITask =
 
 export interface AIRequest { task: AITask; input: string; inputSourceIds: Id[]; schemaVersion: string; }
 export interface AIEnvelope<T> {
-  provider: string; model: string; generatedAt: ISODateTime; inputSourceIds: Id[];
+  provider: string; model: string; generatedAt: ISODateTime; timestamp: ISODateTime;
+  fallbackUsed: boolean; attempts: number; inputSourceIds: Id[];
   confidence?: number; schemaVersion: string; status: AIOutputStatus; data: T;
 }
 export interface ScheduleExtraction { entries: Array<Pick<ScheduleEntry, "title" | "format" | "startTime" | "endTime" | "timezone" | "officialUrl">>; }
@@ -203,6 +210,35 @@ export interface MaisonDetail {
   collections: Collection[];
   assets: Asset[];
   sources: Source[];
+}
+export interface CityDetail {
+  city: CityHub;
+  country?: Country;
+  region?: Region;
+  events: Event[];
+  editions: Edition[];
+  schedule: ScheduleEntry[];
+  collections: Collection[];
+  assets: Asset[];
+  sources: Source[];
+}
+export interface EventDetail {
+  event: Event;
+  city?: CityHub;
+  cities: CityHub[];
+  organizer?: string;
+  editions: Edition[];
+  segments: Segment[];
+  schedule: ScheduleEntry[];
+  collections: Collection[];
+  maisons: Maison[];
+  assets: Asset[];
+  sources: Source[];
+}
+export interface TermDetail {
+  term: Term;
+  sources: Source[];
+  relatedTerms: Term[];
 }
 export interface HomeRail<T> { key: string; title: string; data: T[]; }
 export interface HomeResponse {

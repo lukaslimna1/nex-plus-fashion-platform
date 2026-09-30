@@ -27,8 +27,8 @@ function detailDb() {
           if (query.includes("FROM collections")) return { results: [{ id: "c-1", maisonId: "m-1", editionId: "e-1", name: "Verified Collection", slug: "verified-collection", calendarYear: 2026, seasonYear: 2027, seasonCode: "SS27", seasonLabel: "Spring/Summer 2027", presentedOn: "2026-09-28", canonicalStatus: "CANONICAL", sourceIds: "source-1" }] };
           if (query.includes("FROM maisons")) return { results: [{ id: "m-1", name: "Verified Maison", slug: "verified-maison", websiteUrl: "https://example.test", officialSourceIds: "source-1" }] };
           if (query.includes("FROM editions")) return { results: [{ id: "e-1", eventId: "event-1", cityHubId: "city-1", calendarYear: 2026, seasonYear: 2027, seasonCode: "SS27", seasonLabel: "Spring/Summer 2027", status: "CANONICAL" }] };
-          if (query.includes("FROM events")) return { results: [{ id: "event-1", name: "Event", slug: "event", kind: "FASHION_WEEK" }] };
-          if (query.includes("FROM city_hubs")) return { results: [{ id: "city-1", name: "Paris", slug: "paris", countryId: "country-1", regionId: "region-1", timezone: "Europe/Paris" }] };
+          if (query.includes("FROM events")) return { results: [{ id: "event-1", name: "Event", slug: "event", kind: "FASHION_WEEK", cityHubIds: "city-1" }] };
+          if (query.includes("FROM city_hubs")) return { results: [{ id: "city-1", name: "Paris", slug: "paris", countryId: "country-1", regionId: "region-1", timezone: "Europe/Paris", relatedEventIds: "event-1" }] };
           return { results: [] };
         },
         async run() { return { success: true }; }
@@ -70,6 +70,35 @@ describe("Worker API contract", () => {
     const maisonResponse = await worker.fetch(new Request("https://example.test/api/maisons/verified-maison"), { DB: detailDb(), APP_ENV: "test" });
     expect(maisonResponse.status).toBe(200);
     expect(await maisonResponse.json()).toMatchObject({ data: { maison: { slug: "verified-maison" }, collections: [{ slug: "verified-collection" }] } });
+    const cityResponse = await worker.fetch(new Request("https://example.test/api/cities/paris"), { DB: detailDb(), APP_ENV: "test" });
+    expect(cityResponse.status).toBe(200);
+    expect(await cityResponse.json()).toMatchObject({ data: { city: { slug: "paris" }, events: [{ slug: "event" }], editions: [{ id: "e-1" }], collections: [{ slug: "verified-collection" }] } });
+    const eventResponse = await worker.fetch(new Request("https://example.test/api/events/event"), { DB: detailDb(), APP_ENV: "test" });
+    expect(eventResponse.status).toBe(200);
+    expect(await eventResponse.json()).toMatchObject({ data: { event: { slug: "event" }, cities: [{ slug: "paris" }], editions: [{ id: "e-1" }], collections: [{ slug: "verified-collection" }] } });
+  });
+
+  it("supports term search, category filtering and detail provenance", async () => {
+    const db = {
+      prepare(query: string) {
+        return {
+          bind() { return this; },
+          async first() { return { ok: 1 }; },
+          async all() {
+            if (query.includes("FROM terms")) return { results: [{ id: "term-1", value: "Knitwear", language: "en", definition: "Knitted clothing", sourceIds: "source-getty", slug: "knitwear", canonicalName: "Knitwear", ptBrName: "Malharia", internationalName: "Knitwear", aliases: "[\"knit\"]", category: "material", relatedTermIds: "", examples: "[]", retrievedAt: "2026-09-30T00:00:00.000Z" }] };
+            if (query.includes("FROM sources")) return { results: [{ id: "source-getty", canonicalName: "Getty AAT", type: "VOCABULARY", baseUrl: "https://www.getty.edu/", authorityTier: "B", language: "en", coverageScope: "vocabulary", accessMode: "PUBLIC", active: 1 }] };
+            return { results: [] };
+          },
+          async run() { return { success: true }; }
+        };
+      }
+    } as never;
+    const searchResponse = await worker.fetch(new Request("https://example.test/api/terms?search=knit&category=material"), { DB: db, APP_ENV: "test" });
+    expect(searchResponse.status).toBe(200);
+    expect(await searchResponse.json()).toMatchObject({ data: [{ slug: "knitwear", ptBrName: "Malharia", category: "material" }] });
+    const detailResponse = await worker.fetch(new Request("https://example.test/api/terms/knitwear"), { DB: db, APP_ENV: "test" });
+    expect(detailResponse.status).toBe(200);
+    expect(await detailResponse.json()).toMatchObject({ data: { term: { slug: "knitwear" }, sources: [{ id: "source-getty" }], relatedTerms: [] } });
   });
 
   it("passes route catalog filters without truncating the data source", async () => {

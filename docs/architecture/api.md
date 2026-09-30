@@ -2,7 +2,7 @@
 
 The Worker exposes GET-first JSON endpoints:
 
-`/api/health`, `/api/regions`, `/api/countries`, `/api/cities`, `/api/events`, `/api/editions`, `/api/schedule`, `/api/schedule/now`, `/api/schedule/upcoming`, `/api/home`, `/api/maisons`, `/api/maisons/:slug`, `/api/collections`, `/api/collections/:slug`, `/api/assets`, `/api/sources`, `/api/reviews`, `/api/terms`, `/api/tags` and `/api/search?q=`.
+`/api/health`, `/api/regions`, `/api/countries`, `/api/cities`, `/api/cities/:slug`, `/api/events`, `/api/events/:slug`, `/api/editions`, `/api/schedule`, `/api/schedule/now`, `/api/schedule/upcoming`, `/api/home`, `/api/maisons`, `/api/maisons/:slug`, `/api/collections`, `/api/collections/:slug`, `/api/assets`, `/api/sources`, `/api/reviews`, `/api/terms`, `/api/terms/:slug`, `/api/tags` and `/api/search?q=`.
 
 List responses use:
 
@@ -21,9 +21,12 @@ All fields below are typed in `@nex-plus/types`. The collection, maison, event a
 - `CollectionDetail.mediaStatus` reports `status`, `runwayImages`, `backstageImages`, `detailImages`, `fullShowVideo`, `otherVideos`, `officialSource` and `editorialSources`; it is computed from cataloged assets and resolved sources.
 - `GET /api/maisons/:slug` returns `{ data: MaisonDetail, meta }`, with `maison`, `collections`, `assets` and `sources`.
 - `GET /api/cities` returns the complete imported `CityHub[]` catalog. It accepts `region`, `country`, `status` and `hasCover=true|false`.
+- `GET /api/cities/:slug` returns `CityDetail`: the CityHub plus Country, Region, related Events, Editions, ScheduleEntries, Collections, Assets and resolved Sources.
 - `GET /api/events` returns the complete imported `Event[]` catalog. It accepts `status`, `type`, `city` and `hasCover=true|false`.
+- `GET /api/events/:slug` returns `EventDetail`: the Event plus related Cities, Editions, Segments, ScheduleEntries, Collections, Maisons, Assets and Sources.
 - `GET /api/schedule/now` and `/api/schedule/upcoming` return `ScheduleEntry[]` with computed `state`.
 - `GET /api/assets` accepts optional `collection` (slug or id), `source`, `coverageType` and `mediaType=IMAGE|VIDEO` filters. The response remains `{ data: Asset[], meta }`.
+- `GET /api/terms` accepts optional `search` and `category`; `GET /api/terms/:slug` returns a `TermDetail` with resolved Sources and related Terms.
 
 The shared contracts also cover `Edition`, `Asset`, `VideoAsset`, `Source`, `ProfessionalReview`, `Term`, `Tag`, `MediaResearchJob` and `SourceAdapter`. `Asset` keeps `sequenceNumber`, `lookNumber`, `remoteUrl`, `alternativeUrls`, `thumbnailUrl`, `sourcePageUrl`, `provider`, `providerAssetId`, `sourceId/sourceIds`, credit fields, rights/download policy, media-kind flags and `coverageScope`. Video assets additionally expose `canonicalUrl`, `channelName`, `durationSeconds`, `publishedAt`, `videoType`, `completeness`, `officiality`, `width`, `height`, `aspectRatio`, `orientation`, `playbackMode`, `language`, `availabilityStatus`, `uploaderName`, `uploaderUrl` and `metadata`. A reel or film uses a non-full `completeness` value unless a source proves a complete show. Third-party media is URL/embed-only by default; no endpoint implies permission to download or rehost.
 

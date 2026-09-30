@@ -1,4 +1,4 @@
-import type { Asset, CityHub, Collection, CollectionDetail, CollectionMediaStatus, Country, CoverageType, Edition, Event, ImageGroup, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, Source, Tag, Term } from "@nex-plus/types";
+import type { Asset, CityDetail, CityHub, Collection, CollectionDetail, CollectionMediaStatus, Country, CoverageType, Edition, Event, EventDetail, ImageGroup, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, Segment, Source, Tag, Term, TermDetail } from "@nex-plus/types";
 
 export interface D1DatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
@@ -20,11 +20,14 @@ export interface CatalogRepository {
   listMaisons(): Promise<Maison[]>;
   listCollections(): Promise<Collection[]>;
   listAssets(params?: AssetFilters): Promise<Asset[]>;
+  getCityBySlug(slug: string): Promise<CityDetail | null>;
+  getEventBySlug(slug: string): Promise<EventDetail | null>;
   getCollectionBySlug(slug: string): Promise<CollectionDetail | null>;
   getMaisonBySlug(slug: string): Promise<MaisonDetail | null>;
   listSources(): Promise<Source[]>;
   listReviews(): Promise<ProfessionalReview[]>;
-  listTerms(): Promise<Term[]>;
+  listTerms(params?: TermFilters): Promise<Term[]>;
+  getTermBySlug(slug: string): Promise<TermDetail | null>;
   listTags(): Promise<Tag[]>;
   search(query: string): Promise<Array<{ id: string; type: string; name: string; slug: string }>>;
 }
@@ -37,6 +40,7 @@ export interface AssetFilters {
 }
 export interface CityFilters { region?: string; country?: string; status?: string; hasCover?: boolean; }
 export interface EventFilters { status?: string; type?: string; city?: string; hasCover?: boolean; }
+export interface TermFilters { search?: string; category?: string; }
 
 function asBoolean(value: unknown): boolean { return value === 1 || value === true; }
 function listIds(value: unknown): string[] { return typeof value === "string" && value ? value.split(",") : []; }
@@ -56,6 +60,13 @@ function jsonRecord(value: unknown): Record<string, unknown> {
     const parsed: unknown = JSON.parse(value);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   } catch { return {}; }
+}
+function jsonRecordArray(value: unknown): Array<Record<string, unknown>> {
+  if (typeof value !== "string" || !value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item))) : [];
+  } catch { return []; }
 }
 function cover(value: Record<string, unknown>) {
   if (typeof value.coverAssetKey !== "string" || !value.coverAssetKey) return undefined;
@@ -141,7 +152,7 @@ export class D1CatalogRepository implements CatalogRepository {
     const values: string[] = [];
     if (params.from) { conditions.push("s.start_time >= ?"); values.push(params.from); }
     if (params.to) { conditions.push("s.start_time <= ?"); values.push(params.to); }
-    const query = `SELECT s.id, s.edition_id AS editionId, s.event_id AS eventId, s.segment_id AS segmentId, s.city_hub_id AS cityHubId, s.title, s.format, s.start_time AS startTime, s.end_time AS endTime, s.timezone, s.verification_status AS verificationStatus, s.official_url AS officialUrl, s.livestream_url AS livestreamUrl, s.source_ids AS sourceIds FROM schedule_entries s WHERE ${conditions.join(" AND ")} ORDER BY s.start_time`;
+    const query = `SELECT s.id, s.edition_id AS editionId, s.event_id AS eventId, s.segment_id AS segmentId, s.city_hub_id AS cityHubId, s.title, s.format, s.start_time AS startTime, s.end_time AS endTime, s.timezone, s.verification_status AS verificationStatus, s.official_url AS officialUrl, s.official_url AS sourcePageUrl, s.livestream_url AS livestreamUrl, s.venue_name AS venueName, s.verified_at AS verifiedAt, s.source_ids AS sourceIds FROM schedule_entries s WHERE ${conditions.join(" AND ")} ORDER BY s.start_time`;
     const { results } = await this.db.prepare(query).bind(...values).all<Omit<ScheduleEntry, "sourceIds"> & { sourceIds: string }>();
     return results.map((row) => ({ ...row, endTime: row.endTime ?? undefined, sourceIds: listIds(row.sourceIds) }));
   }
@@ -222,6 +233,61 @@ export class D1CatalogRepository implements CatalogRepository {
       mediaStatus: mediaStatusForAssets(collectionAssets, collectionSources)
     };
   }
+  async getCityBySlug(slug: string): Promise<CityDetail | null> {
+    const city = (await this.listCities()).find((item) => item.slug === slug);
+    if (!city) return null;
+    const [countries, regions, events, editions, schedule, collections, assets, sources] = await Promise.all([
+      this.listCountries(), this.listRegions(), this.listEvents(), this.listEditions(), this.listSchedule(), this.listCollections(), this.listAssets(), this.listSources()
+    ]);
+    const cityEvents = events.filter((event) => event.cityHubIds.includes(city.id) || city.relatedEventIds.includes(event.id));
+    const cityEditions = editions.filter((edition) => edition.cityHubId === city.id || cityEvents.some((event) => event.id === edition.eventId));
+    const editionIds = new Set(cityEditions.map((edition) => edition.id));
+    const cityCollections = collections.filter((collection) => editionIds.has(collection.editionId));
+    const collectionIds = new Set(cityCollections.map((collection) => collection.id));
+    const citySources = sources.filter((source) => cityCollections.some((collection) => collection.sourceIds.includes(source.id)) || city.primarySourceId === source.id || city.complementarySourceIds.includes(source.id));
+    return {
+      city,
+      ...(countries.find((country) => country.id === city.countryId) ? { country: countries.find((country) => country.id === city.countryId)! } : {}),
+      ...(regions.find((region) => region.id === city.regionId) ? { region: regions.find((region) => region.id === city.regionId)! } : {}),
+      events: cityEvents,
+      editions: cityEditions,
+      schedule: schedule.filter((entry) => entry.cityHubId === city.id || cityEditions.some((edition) => edition.id === entry.editionId)),
+      collections: cityCollections,
+      assets: assets.filter((asset) => asset.collectionId && collectionIds.has(asset.collectionId)),
+      sources: citySources
+    };
+  }
+  async getEventBySlug(slug: string): Promise<EventDetail | null> {
+    const event = (await this.listEvents()).find((item) => item.slug === slug);
+    if (!event) return null;
+    const [cities, editions, segments, schedule, collections, maisons, assets, sources] = await Promise.all([
+      this.listCities(), this.listEditions(), this.listSegmentsForEvent(event.id), this.listSchedule(), this.listCollections(), this.listMaisons(), this.listAssets(), this.listSources()
+    ]);
+    const eventEditions = editions.filter((edition) => edition.eventId === event.id);
+    const editionIds = new Set(eventEditions.map((edition) => edition.id));
+    const eventCollections = collections.filter((collection) => editionIds.has(collection.editionId));
+    const collectionIds = new Set(eventCollections.map((collection) => collection.id));
+    const eventMaisons = maisons.filter((maison) => eventCollections.some((collection) => collection.maisonId === maison.id));
+    const eventSources = sources.filter((source) => event.primarySourceId === source.id || event.complementarySourceIds.includes(source.id) || eventCollections.some((collection) => collection.sourceIds.includes(source.id)));
+    const eventCities = cities.filter((city) => event.cityHubIds.includes(city.id) || eventEditions.some((edition) => edition.cityHubId === city.id));
+    return {
+      event,
+      ...(eventCities[0] ? { city: eventCities[0] } : {}),
+      cities: eventCities,
+      ...(event.organizer ? { organizer: event.organizer } : {}),
+      editions: eventEditions,
+      segments,
+      schedule: schedule.filter((entry) => entry.eventId === event.id || editionIds.has(entry.editionId)),
+      collections: eventCollections,
+      maisons: eventMaisons,
+      assets: assets.filter((asset) => asset.collectionId && collectionIds.has(asset.collectionId)),
+      sources: eventSources
+    };
+  }
+  private async listSegmentsForEvent(eventId: string): Promise<Segment[]> {
+    const { results } = await this.db.prepare("SELECT s.id, s.name, s.code FROM segments s INNER JOIN event_segments es ON es.segment_id = s.id WHERE es.event_id = ? ORDER BY s.name").bind(eventId).all<Segment>();
+    return results;
+  }
   private async listTagsForCollection(collectionId: string): Promise<Tag[]> {
     const { results } = await this.db.prepare("SELECT t.id, t.value, t.slug, t.source_ids AS sourceIds FROM tags t INNER JOIN collection_tags ct ON ct.tag_id = t.id WHERE ct.collection_id = ? ORDER BY t.value").bind(collectionId).all<Omit<Tag, "sourceIds"> & { sourceIds: string }>();
     return results.map(({ sourceIds, ...row }) => ({ ...row, sourceIds: listIds(sourceIds) }));
@@ -242,9 +308,25 @@ export class D1CatalogRepository implements CatalogRepository {
     const { results } = await this.db.prepare("SELECT id, collection_id AS collectionId, source_id AS sourceId, title, url, published_at AS publishedAt, language, canonical_status AS canonicalStatus, author, publication, summary FROM professional_reviews ORDER BY published_at DESC").all<ProfessionalReview>();
     return results;
   }
-  async listTerms(): Promise<Term[]> {
-    const { results } = await this.db.prepare("SELECT id, value, language, definition, source_ids AS sourceIds FROM terms ORDER BY value").all<Omit<Term, "sourceIds"> & { sourceIds: string }>();
-    return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds) }));
+  async listTerms(params: TermFilters = {}): Promise<Term[]> {
+    const conditions: string[] = [];
+    const values: string[] = [];
+    if (params.search?.trim()) {
+      const needle = `%${params.search.trim().replace(/[%_]/g, "\\$&").slice(0, 120)}%`;
+      conditions.push("(value LIKE ? ESCAPE '\\' OR canonical_name LIKE ? ESCAPE '\\' OR pt_br_name LIKE ? ESCAPE '\\' OR international_name LIKE ? ESCAPE '\\' OR slug LIKE ? ESCAPE '\\')");
+      values.push(needle, needle, needle, needle, needle);
+    }
+    if (params.category?.trim()) { conditions.push("category = ?"); values.push(params.category.trim()); }
+    const query = `SELECT id, value, language, definition, source_ids AS sourceIds, slug, canonical_name AS canonicalName, pt_br_name AS ptBrName, international_name AS internationalName, aliases_json AS aliases, context, category, external_uri AS externalUri, related_term_ids AS relatedTermIds, examples_json AS examples, retrieved_at AS retrievedAt FROM terms${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY COALESCE(canonical_name, value)`;
+    const { results } = await this.db.prepare(query).bind(...values).all<Omit<Term, "sourceIds" | "aliases" | "relatedTermIds" | "examples"> & { sourceIds: string; aliases: string; relatedTermIds: string; examples: string }>();
+    return results.map((row) => ({ ...row, sourceIds: listIds(row.sourceIds), aliases: jsonArray(row.aliases), relatedTermIds: listIds(row.relatedTermIds), examples: jsonRecordArray(row.examples) }));
+  }
+  async getTermBySlug(slug: string): Promise<TermDetail | null> {
+    const term = (await this.listTerms()).find((item) => item.slug === slug);
+    if (!term) return null;
+    const [sources, terms] = await Promise.all([this.listSources(), this.listTerms()]);
+    const relatedIds = new Set(term.relatedTermIds);
+    return { term, sources: sources.filter((source) => term.sourceIds.includes(source.id)), relatedTerms: terms.filter((candidate) => relatedIds.has(candidate.id)) };
   }
   async listTags(): Promise<Tag[]> {
     const { results } = await this.db.prepare("SELECT id, value, slug, source_ids AS sourceIds FROM tags ORDER BY value").all<Omit<Tag, "sourceIds"> & { sourceIds: string }>();

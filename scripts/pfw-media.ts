@@ -37,7 +37,7 @@ function decodeHtml(value: string): string {
 export function extractVogueRunwayImages(html: string, filenamePrefix: string, photographer = "Filippo Fior"): VogueRunwayImage[] {
   const decoded = decodeHtml(html);
   const pattern = /https:\/\/assets\.vogue\.com\/photos\/([^/]+)\/master\/w_1600,c_limit\/([^"\\\s]+\.jpg)/g;
-  const bySequence = new Map<number, VogueRunwayImage>();
+  const byProviderAsset = new Map<string, VogueRunwayImage>();
   for (const match of decoded.matchAll(pattern)) {
     const photoId = match[1];
     const filename = match[2];
@@ -45,12 +45,14 @@ export function extractVogueRunwayImages(html: string, filenamePrefix: string, p
     const fileMatch = filename.match(/^(\d+)-(.+\.jpg)$/);
     if (!photoId || !fileMatch || fileMatch[2] !== filenamePrefix) continue;
     const sequenceNumber = Number(fileMatch[1]);
-    if (!Number.isSafeInteger(sequenceNumber) || bySequence.has(sequenceNumber)) continue;
+    if (!Number.isSafeInteger(sequenceNumber)) continue;
     const remoteUrl = `https://assets.vogue.com/photos/${photoId}/master/w_1600,c_limit/${filename}`;
     const thumbnailUrl = `https://assets.vogue.com/photos/${photoId}/master/w_360%2Cc_limit/${filename}`;
-    bySequence.set(sequenceNumber, {
+    const providerAssetId = `${photoId}/${filename}`;
+    if (byProviderAsset.has(providerAssetId)) continue;
+    byProviderAsset.set(providerAssetId, {
       sequenceNumber,
-      providerAssetId: `${photoId}/${filename}`,
+      providerAssetId,
       remoteUrl,
       alternativeUrls: [`https://assets.vogue.com/photos/${photoId}/master/w_960,c_limit/${filename}`],
       thumbnailUrl,
@@ -60,7 +62,7 @@ export function extractVogueRunwayImages(html: string, filenamePrefix: string, p
       creditLine: `${photographer} / Gorunway.com`
     });
   }
-  return Array.from(bySequence.values()).sort((left, right) => left.sequenceNumber - right.sequenceNumber);
+  return Array.from(byProviderAsset.values()).sort((left, right) => left.sequenceNumber - right.sequenceNumber || left.providerAssetId.localeCompare(right.providerAssetId));
 }
 
 export function toParisIso(localDate: string, localTime: string): string {

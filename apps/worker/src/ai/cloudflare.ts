@@ -17,7 +17,8 @@ export class CloudflareAIProvider implements AIProvider {
     const text = extractText(raw).trim();
     let data: T;
     try { data = JSON.parse(text) as T; } catch { throw new Error("Workers AI returned non-JSON output"); }
-    return { provider: this.name, model: this.model, generatedAt: new Date().toISOString(), inputSourceIds: request.inputSourceIds, schemaVersion: request.schemaVersion, status: "AI_DRAFT", data };
+    const timestamp = new Date().toISOString();
+    return { provider: this.name, model: this.model, generatedAt: timestamp, timestamp, fallbackUsed: false, attempts: 1, inputSourceIds: request.inputSourceIds, schemaVersion: request.schemaVersion, status: "AI_DRAFT", data };
   }
   translate(request: AIRequest): Promise<AIEnvelope<{ text: string }>> { return this.extractStructuredData<{ text: string }>(request); }
   summarize(request: AIRequest): Promise<AIEnvelope<{ text: string }>> { return this.extractStructuredData<{ text: string }>(request); }
