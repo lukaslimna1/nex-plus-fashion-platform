@@ -1,7 +1,23 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { GeminiAIProvider } from "../apps/worker/src/ai/gemini.js";
 import { AIProviderRouter } from "../apps/worker/src/ai/router.js";
 import { collectionExtractionSchema, scheduleExtractionSchema, validateAIOutput } from "../apps/worker/src/ai/schemas.js";
 
+function loadLocalEnv(): void {
+  const path = resolve(process.cwd(), ".env");
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (!match) continue;
+    const key = match[1]!;
+    let value = match[2] ?? "";
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+loadLocalEnv();
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
   console.log(JSON.stringify({ provider: "gemini", status: "GEMINI_API_KEY_REQUIRED", schemaSuccess: false }));
