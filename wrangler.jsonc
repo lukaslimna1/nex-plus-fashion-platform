@@ -11,6 +11,7 @@
     {
       "binding": "DB",
       "database_name": "nex-plus-fashion",
+      "database_id": "1325ad95-daf7-44ae-8f68-02bcba20839a",
       "migrations_dir": "migrations"
     }
   ],
@@ -32,6 +33,7 @@
         {
           "binding": "DB",
           "database_name": "nex-plus-fashion",
+          "database_id": "1325ad95-daf7-44ae-8f68-02bcba20839a",
           "migrations_dir": "migrations"
         }
       ],
@@ -47,6 +49,7 @@
         {
           "binding": "DB",
           "database_name": "nex-plus-fashion",
+          "database_id": "1325ad95-daf7-44ae-8f68-02bcba20839a",
           "migrations_dir": "migrations"
         }
       ],

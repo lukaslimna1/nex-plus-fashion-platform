@@ -3,9 +3,9 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 try {
-  const { stdout } = await run("npx", ["wrangler", "whoami"], { shell: true });
-  const output = stdout.replace(/\r?\n/g, " ").trim();
-  if (/not authenticated|wrangler login/i.test(output)) throw new Error(output);
+  const { stdout, stderr } = await run("npx", ["wrangler", "whoami"], { shell: true });
+  const output = `${stdout}\n${stderr}`.replace(/\r?\n/g, " ").trim();
+  if (/not authenticated|please run.*wrangler login/i.test(output)) throw new Error(output);
   console.log(JSON.stringify({ wrangler: "authenticated", output }));
 } catch (error) {
   const message = error instanceof Error ? error.message : "unknown";
