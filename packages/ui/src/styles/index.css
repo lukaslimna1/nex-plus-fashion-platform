@@ -1,0 +1,192 @@
+@import "./tokens.css";
+
+/* Base Resets & Theme */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--nex-bg-primary);
+  color: var(--nex-text-primary);
+  font-family: var(--nex-font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Typography Utilities */
+.nex-display {
+  font-family: var(--nex-font-display);
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.nex-h1 {
+  font-family: var(--nex-font-sans);
+  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.nex-h2 {
+  font-family: var(--nex-font-sans);
+  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.nex-h3 {
+  font-family: var(--nex-font-sans);
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.nex-body {
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--nex-text-secondary);
+}
+
+.nex-body-small {
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--nex-text-secondary);
+}
+
+.nex-metadata {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nex-text-muted);
+}
+
+.nex-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--nex-text-primary);
+}
+
+.nex-caption {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--nex-text-muted);
+}
+
+/* Glassmorphism & Surface Styles */
+.nex-glass {
+  background: var(--nex-surface-elevated);
+  backdrop-filter: blur(var(--nex-blur-lg));
+  -webkit-backdrop-filter: blur(var(--nex-blur-lg));
+  border: 1px solid var(--nex-border-subtle);
+}
+
+.nex-glass-hover {
+  transition: background var(--nex-transition-normal), border-color var(--nex-transition-normal), transform var(--nex-transition-normal);
+}
+
+.nex-glass-hover:hover {
+  background: rgba(36, 36, 46, 0.9);
+  border-color: var(--nex-border-strong);
+}
+
+/* Animations */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes nexShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes nexFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nexFadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Focus Ring */
+:focus-visible {
+  outline: 2px solid var(--nex-accent);
+  outline-offset: 2px;
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--nex-bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--nex-surface-2);
+  border-radius: var(--nex-radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--nex-text-muted);
+}
+
+/* Hide scrollbar for clean rails */
+.nex-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.nex-no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Responsive Navbar & Shell Controls */
+.nex-hamburger-btn {
+  display: none;
+}
+
+.nex-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .nex-nav-desktop {
+    display: none !important;
+  }
+  .nex-search-placeholder, .nex-search-kbd {
+    display: none !important;
+  }
+  .nex-hamburger-btn {
+    display: flex !important;
+  }
+  .nex-bottom-nav {
+    display: flex !important;
+  }
+  .nex-app-main {
+    padding-bottom: 74px !important;
+  }
+}

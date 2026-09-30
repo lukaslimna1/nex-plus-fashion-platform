@@ -1,0 +1,80 @@
+:root {
+  /* Colors */
+  --nex-bg-primary: #070709;
+  --nex-bg-secondary: #0d0d11;
+  --nex-surface-1: #141419;
+  --nex-surface-2: #1e1e26;
+  --nex-surface-elevated: rgba(26, 26, 34, 0.82);
+
+  --nex-border-subtle: rgba(255, 255, 255, 0.08);
+  --nex-border-strong: rgba(255, 255, 255, 0.18);
+  --nex-border-focus: rgba(255, 255, 255, 0.45);
+
+  --nex-text-primary: #f5f5f7;
+  --nex-text-secondary: #a3a3af;
+  --nex-text-muted: #6e6e7c;
+
+  --nex-accent: #ffffff;
+  --nex-accent-gold: #d4af37;
+  --nex-live: #ef4444;
+  --nex-live-glow: rgba(239, 68, 68, 0.35);
+  --nex-success: #10b981;
+  --nex-warning: #f59e0b;
+  --nex-error: #f43f5e;
+
+  /* Typography */
+  --nex-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --nex-font-display: "Cinzel", "Syne", "Playfair Display", "Didot", "Bodoni MT", Georgia, serif;
+  --nex-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Spacing Scale */
+  --nex-space-2: 2px;
+  --nex-space-4: 4px;
+  --nex-space-8: 8px;
+  --nex-space-12: 12px;
+  --nex-space-16: 16px;
+  --nex-space-20: 20px;
+  --nex-space-24: 24px;
+  --nex-space-32: 32px;
+  --nex-space-40: 40px;
+  --nex-space-48: 48px;
+  --nex-space-64: 64px;
+  --nex-space-80: 80px;
+  --nex-space-96: 96px;
+
+  /* Radius Scale */
+  --nex-radius-none: 0px;
+  --nex-radius-sm: 4px;
+  --nex-radius-md: 8px;
+  --nex-radius-lg: 12px;
+  --nex-radius-xl: 16px;
+  --nex-radius-full: 9999px;
+
+  /* Shadows */
+  --nex-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --nex-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.65);
+  --nex-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.85);
+  --nex-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.95);
+  --nex-shadow-glow-live: 0 0 16px rgba(239, 68, 68, 0.45);
+
+  /* Blur */
+  --nex-blur-sm: 4px;
+  --nex-blur-md: 8px;
+  --nex-blur-lg: 16px;
+  --nex-blur-xl: 24px;
+
+  /* Transitions */
+  --nex-ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
+  --nex-transition-fast: 150ms var(--nex-ease-cinematic);
+  --nex-transition-normal: 250ms var(--nex-ease-cinematic);
+  --nex-transition-smooth: 400ms var(--nex-ease-cinematic);
+  --nex-transition-cinematic: 700ms var(--nex-ease-cinematic);
+
+  /* Z-Index */
+  --nex-z-base: 1;
+  --nex-z-card-hover: 20;
+  --nex-z-header: 50;
+  --nex-z-drawer: 60;
+  --nex-z-modal: 70;
+  --nex-z-toast: 80;
+}
