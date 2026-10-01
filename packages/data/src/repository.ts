@@ -1,4 +1,4 @@
-import type { Asset, CityDetail, CityHub, Collection, CollectionDetail, CollectionMediaStatus, Country, CoverageType, CreativeDirectionHistory, Edition, Event, EventDetail, ImageGroup, Maison, MaisonDetail, ProfessionalReview, Region, ScheduleEntry, SearchResult, Segment, Source, Tag, Term, TermDetail, Trend, TrendDetail } from "@nex-plus/types";
+import type { Asset, CityDetail, CityHub, Collection, CollectionDetail, CollectionMediaStatus, Country, CoverageType, CreativeDirectionHistory, Edition, Event, EventDetail, ImageGroup, Maison, MaisonDetail, MediaResearchCell, ProfessionalReview, Region, ScheduleEntry, SearchResult, Segment, Source, Tag, Term, TermDetail, Trend, TrendDetail } from "@nex-plus/types";
 
 export interface D1DatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
@@ -87,7 +87,10 @@ function mediaStatusForAssets(assets: Asset[], sources: Source[]): CollectionMed
   const otherVideos = assets.filter((asset) => asset.assetKind === "VIDEO" && !(asset.videoType === "FULL_SHOW" || asset.completeness === "FULL")).length;
   const officialSource = sources.some((source) => source.authorityTier === "A");
   const editorialSources = new Set(sources.filter((source) => source.authorityTier !== "A").map((source) => source.id)).size;
-  const status = assets.length === 0 ? "NO_MEDIA_FOUND" : runwayImages > 0 && fullShowVideo ? "COMPLETE" : "PARTIAL";
+  const imageCount = assets.filter((asset) => asset.assetKind === "IMAGE").length;
+  const videoCount = assets.filter((asset) => asset.assetKind === "VIDEO").length;
+  const sourceCount = new Set(assets.flatMap((asset) => asset.sourceIds)).size;
+  const status = assets.length === 0 ? "NEEDS_RESEARCH" : fullShowVideo ? (sourceCount > 1 ? "COMPLETE_MULTI_SOURCE" : "COMPLETE_SINGLE_SOURCE") : imageCount > 0 && videoCount > 0 ? "PARTIAL" : imageCount > 0 ? "IMAGES_ONLY" : "VIDEO_ONLY";
   return { status, runwayImages, backstageImages, detailImages, fullShowVideo, otherVideos, officialSource, editorialSources };
 }
 
@@ -154,9 +157,9 @@ export class D1CatalogRepository implements CatalogRepository {
     const values: string[] = [];
     if (params.from) { conditions.push("s.start_time >= ?"); values.push(params.from); }
     if (params.to) { conditions.push("s.start_time <= ?"); values.push(params.to); }
-    const query = `SELECT s.id, s.edition_id AS editionId, s.event_id AS eventId, s.segment_id AS segmentId, s.city_hub_id AS cityHubId, s.title, s.format, s.start_time AS startTime, s.end_time AS endTime, s.timezone, s.verification_status AS verificationStatus, s.official_url AS officialUrl, s.official_url AS sourcePageUrl, s.livestream_url AS livestreamUrl, s.venue_name AS venueName, s.verified_at AS verifiedAt, s.source_ids AS sourceIds FROM schedule_entries s WHERE ${conditions.join(" AND ")} ORDER BY s.start_time`;
-    const { results } = await this.db.prepare(query).bind(...values).all<Omit<ScheduleEntry, "sourceIds"> & { sourceIds: string }>();
-    return results.map((row) => ({ ...row, endTime: row.endTime ?? undefined, sourceIds: listIds(row.sourceIds) }));
+    const query = `SELECT s.id, (SELECT cse.collection_id FROM collection_schedule_entries cse WHERE cse.schedule_entry_id = s.id LIMIT 1) AS collectionId, s.edition_id AS editionId, s.event_id AS eventId, s.segment_id AS segmentId, s.city_hub_id AS cityHubId, s.title, s.format, s.start_time AS startTime, s.end_time AS endTime, s.timezone, s.verification_status AS verificationStatus, s.official_url AS officialUrl, s.official_url AS sourcePageUrl, s.livestream_url AS livestreamUrl, s.venue_name AS venueName, s.verified_at AS verifiedAt, s.source_ids AS sourceIds FROM schedule_entries s WHERE ${conditions.join(" AND ")} ORDER BY s.start_time`;
+    const { results } = await this.db.prepare(query).bind(...values).all<Omit<ScheduleEntry, "sourceIds" | "collectionId"> & { collectionId?: string | null; sourceIds: string }>();
+    return results.map(({ collectionId, ...row }) => ({ ...row, endTime: row.endTime ?? undefined, sourceIds: listIds(row.sourceIds), ...(typeof collectionId === "string" ? { collectionId } : {}) }));
   }
   async listMaisons(): Promise<Maison[]> {
     const { results } = await this.db.prepare("SELECT id, name, slug, website_url AS websiteUrl, founded_year AS foundedYear, logo_url AS logoUrl, founded_by_json AS foundedBy, country_name AS country, city_name AS city, headquarters, artistic_direction AS artisticDirection, current_creative_director AS currentCreativeDirector, about, history, socials_json AS socials, other_official_links_json AS otherOfficialLinks, research_status AS researchStatus, verified_at AS verifiedAt, official_source_ids AS sourceIds FROM maisons WHERE deleted_at IS NULL ORDER BY name").all<Record<string, unknown>>();
@@ -182,7 +185,7 @@ export class D1CatalogRepository implements CatalogRepository {
     if (params.source) { conditions.push("(',' || a.source_ids || ',') LIKE ?"); values.push(`%,${params.source},%`); }
     if (params.coverageType) { conditions.push("COALESCE(a.coverage_type_label, a.coverage_type) = ?"); values.push(params.coverageType); }
     if (params.mediaType) { conditions.push("a.asset_kind = ?"); values.push(params.mediaType); }
-    const query = `SELECT a.id, a.collection_id AS collectionId, a.title, a.source_page_url AS sourcePageUrl, a.remote_url AS remoteUrl, a.embed_url AS embedUrl, a.provider, a.provider_asset_id AS providerAssetId, a.thumbnail_url AS thumbnailUrl, a.alternative_urls AS alternativeUrls, a.creator, a.photographer, a.credit_line AS creditLine, a.source_ids AS sourceIds, a.rights_status AS rightsStatus, a.download_policy AS downloadPolicy, a.display_mode AS displayMode, a.local_path AS localPath, a.cache_url AS cacheUrl, a.canonical_status AS canonicalStatus, a.asset_kind AS assetKind, COALESCE(a.coverage_type_label, a.coverage_type) AS coverageType, a.coverage_scope AS coverageScope, a.copyright_holder AS copyrightHolder, a.license_name AS licenseName, a.license_url AS licenseUrl, a.attribution_required AS attributionRequired, a.embed_allowed AS embedAllowed, a.remote_render_allowed AS remoteRenderAllowed, a.rehost_allowed AS rehostAllowed, a.verified_at AS verifiedAt, a.sequence_number AS sequenceNumber, a.look_number AS lookNumber, a.canonical_url AS canonicalUrl, a.channel_name AS channelName, a.duration_seconds AS durationSeconds, a.published_at AS publishedAt, a.video_type AS videoType, a.completeness, a.officiality, a.width, a.height, a.aspect_ratio AS aspectRatio, a.orientation, a.playback_mode AS playbackMode, a.language, a.availability_status AS availabilityStatus, a.uploader_name AS uploaderName, a.uploader_url AS uploaderUrl, a.metadata_json AS metadata FROM assets a LEFT JOIN collections c ON c.id = a.collection_id WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(a.sequence_number, 999999), a.id`;
+    const query = `SELECT a.id, a.collection_id AS collectionId, a.title, a.source_page_url AS sourcePageUrl, a.original_url AS originalUrl, a.remote_url AS remoteUrl, a.embed_url AS embedUrl, a.provider, a.provider_asset_id AS providerAssetId, a.thumbnail_url AS thumbnailUrl, a.alternative_urls AS alternativeUrls, a.creator, a.photographer, a.credit_line AS creditLine, a.source_ids AS sourceIds, a.rights_status AS rightsStatus, a.download_policy AS downloadPolicy, a.display_mode AS displayMode, a.local_path AS localPath, a.cache_url AS cacheUrl, a.canonical_status AS canonicalStatus, a.asset_kind AS assetKind, COALESCE(a.coverage_type_label, a.coverage_type) AS coverageType, a.coverage_scope AS coverageScope, a.copyright_holder AS copyrightHolder, a.license_name AS licenseName, a.license_url AS licenseUrl, a.attribution_required AS attributionRequired, a.embed_allowed AS embedAllowed, a.remote_render_allowed AS remoteRenderAllowed, a.rehost_allowed AS rehostAllowed, a.verified_at AS verifiedAt, a.sequence_number AS sequenceNumber, a.look_number AS lookNumber, a.canonical_url AS canonicalUrl, a.channel_name AS channelName, a.duration_seconds AS durationSeconds, a.published_at AS publishedAt, a.video_type AS videoType, a.completeness, a.officiality, a.width, a.height, a.aspect_ratio AS aspectRatio, a.orientation, a.playback_mode AS playbackMode, a.language, a.availability_status AS availabilityStatus, a.uploader_name AS uploaderName, a.uploader_url AS uploaderUrl, a.metadata_json AS metadata FROM assets a LEFT JOIN collections c ON c.id = a.collection_id WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(a.sequence_number, 999999), a.id`;
     const { results } = await this.db.prepare(query).bind(...values).all<AssetRow>();
     return results.map((row) => {
       const sourceIds = listIds(row.sourceIds);
@@ -199,11 +202,18 @@ export class D1CatalogRepository implements CatalogRepository {
       };
     });
   }
+  async listMediaResearch(collectionId: string): Promise<MediaResearchCell[]> {
+    const { results } = await this.db.prepare("SELECT id, collection_id AS collectionId, source_key AS sourceKey, source_id AS sourceId, media_type AS mediaType, state, checked_at AS checkedAt, source_page_url AS sourcePageUrl, result_count AS resultCount, reason, metadata_json AS metadata FROM media_research_matrix WHERE collection_id = ? ORDER BY source_key, media_type").bind(collectionId).all<Record<string, unknown>>();
+    return results.map((row) => ({
+      id: String(row.id), collectionId: String(row.collectionId), sourceKey: String(row.sourceKey), mediaType: row.mediaType as "IMAGE" | "VIDEO", state: row.state as MediaResearchCell["state"], checkedAt: String(row.checkedAt), resultCount: Number(row.resultCount ?? 0), reason: String(row.reason),
+      ...(typeof row.sourceId === "string" ? { sourceId: row.sourceId } : {}), ...(typeof row.sourcePageUrl === "string" ? { sourcePageUrl: row.sourcePageUrl } : {}), ...(Object.keys(jsonRecord(row.metadata)).length > 0 ? { metadata: jsonRecord(row.metadata) } : {})
+    }));
+  }
   async getCollectionBySlug(slug: string): Promise<CollectionDetail | null> {
     const collection = (await this.listCollections()).find((item) => item.slug === slug);
     if (!collection) return null;
-    const [maisons, editions, events, cities, schedule, assets, sources, reviews, tags] = await Promise.all([
-      this.listMaisons(), this.listEditions(), this.listEvents(), this.listCities(), this.listSchedule(), this.listAssets(), this.listSources(), this.listReviews(), this.listTagsForCollection(collection.id)
+    const [maisons, editions, events, cities, schedule, assets, sources, reviews, tags, mediaResearch] = await Promise.all([
+      this.listMaisons(), this.listEditions(), this.listEvents(), this.listCities(), this.listSchedule(), this.listAssets(), this.listSources(), this.listReviews(), this.listTagsForCollection(collection.id), this.listMediaResearch(collection.id)
     ]);
     const maison = maisons.find((item) => item.id === collection.maisonId);
     if (!maison) return null;
@@ -235,13 +245,14 @@ export class D1CatalogRepository implements CatalogRepository {
       ...(edition ? { edition } : {}),
       ...(event ? { event } : {}),
       ...(city ? { city } : {}),
-      schedule: schedule.filter((item) => item.editionId === collection.editionId),
+      schedule: schedule.filter((item) => item.collectionId === collection.id),
       assets: collectionAssets,
       imageGroups: Array.from(imageGroups.values()),
       videos: playableAssets.filter((item) => item.assetKind === "VIDEO"),
       sources: collectionSources,
       reviews: reviews.filter((item) => item.collectionId === collection.id),
       tags,
+      mediaResearch,
       mediaStatus: mediaStatusForAssets(playableAssets, collectionSources)
     };
   }

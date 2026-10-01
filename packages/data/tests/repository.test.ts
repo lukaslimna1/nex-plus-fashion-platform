@@ -35,3 +35,23 @@ describe("asset query contract", () => {
     expect(values).toEqual(["maxhosa-africa-womenswear-spring-summer-2027", "maxhosa-africa-womenswear-spring-summer-2027", "%,source-vogue-runway,%", "RUNWAY", "IMAGE"]);
   });
 });
+
+describe("catalog relationship contract", () => {
+  it("loads only the explicitly related schedule entry for a Collection", async () => {
+    let query = "";
+    const db = {
+      prepare(input: string) {
+        query = input;
+        return {
+          bind() { return this; },
+          async all() { return { results: [] }; },
+          async first() { return null; },
+          async run() { return { success: true }; }
+        };
+      }
+    } as never;
+    await new D1CatalogRepository(db).listSchedule();
+    expect(query).toContain("collection_schedule_entries");
+    expect(query).toContain("cse.schedule_entry_id = s.id");
+  });
+});

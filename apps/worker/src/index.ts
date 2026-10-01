@@ -48,7 +48,7 @@ function homeResponse(input: Awaited<ReturnType<typeof buildHome>>): HomeRespons
       upcoming: rail("upcoming", "Próximos eventos", upcoming),
       recentCollections: rail("recent-collections", "Collections recentes", collections.slice(0, 10)),
       latestPresentations: rail("latest-presentations", "Apresentações recentes", upcoming.filter((entry) => entry.format === "PRESENTATION").slice(0, 10)),
-      videos: rail("videos", "Vídeos", assets.filter((asset) => asset.assetKind === "VIDEO" || Boolean(asset.embedUrl)).slice(0, 10)),
+      videos: rail("videos", "Vídeos", assets.filter((asset) => asset.availabilityStatus !== "REMOVED" && (asset.assetKind === "VIDEO" || Boolean(asset.embedUrl))).slice(0, 10)),
       maisons: rail("maisons", "Maisons", maisons.slice(0, 10)),
       reviews: rail("reviews", "Leituras profissionais", reviews.slice(0, 10)),
       trends: rail("trends", "Tendências com evidência", trends.slice(0, 10)),

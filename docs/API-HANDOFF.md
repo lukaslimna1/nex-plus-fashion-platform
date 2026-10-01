@@ -19,7 +19,7 @@ The production Worker and API use the remote D1 binding `DB`. JSON collection en
 | `GET /api/schedule/now` | Events happening now | `data: ScheduleEntry[]` | `200`, current count depends on request time |
 | `GET /api/schedule/upcoming` | Upcoming schedule | `data: ScheduleEntry[]` | `200`, current count depends on request time |
 | `GET /api/collections` | Collection catalog | `data: Collection[]`, `meta.count` | `200`, 30 records |
-| `GET /api/collections/:slug` | Collection detail and media | `collection`, `maison`, `edition`, `event`, `city`, `schedule`, `assets`, `imageGroups`, `videos`, `sources`, `mediaStatus` | Julie Kegels, Christian Dior and MAXHOSA AFRICA verified |
+| `GET /api/collections/:slug` | Collection detail and media | `collection`, `maison`, `edition`, `event`, `city`, explicitly related `schedule`, `assets`, `imageGroups`, `videos`, `sources`, `reviews`, `mediaResearch`, `mediaStatus` | PFW SS27 Collection ↔ ScheduleEntry relations are explicit in D1 |
 | `GET /api/maisons/:slug` | Maison detail | `maison`, `creativeDirectorHistory`, `events`, `collections`, `assets`, `media`, `reviews`, `sources` | Independent Maison profile; Collection data is related, not substituted |
 | `GET /api/assets` | Media catalog | `data: Asset[]`; filters `collection`, `source`, `coverageType`, `mediaType` | `200`, 163 records |
 | `GET /api/terms` | Term/library catalog | `data: Term[]`; optional `search` and `category` | `200`, public read API exists |
@@ -37,7 +37,9 @@ Additional public routes are documented in `docs/architecture/api.md`: regions, 
 
 ## Media fields
 
-`Asset` exposes `remoteUrl`, `alternativeUrls`, `thumbnailUrl`, `sourcePageUrl`, `provider`, `providerAssetId`, creator/photographer/credit fields, rights/download policy and provenance IDs. Video assets additionally expose provider, embed/playback, coverage, completeness and officiality fields. The API does not imply download or rehosting permission.
+`Asset` exposes `originalUrl` (when the source has a separate original URL), `remoteUrl`, `alternativeUrls`, `thumbnailUrl`, `sourcePageUrl`, `provider`, `providerAssetId`, creator/photographer/credit fields, rights/download policy and provenance IDs. Video assets additionally expose provider, embed/playback, coverage, completeness and officiality fields. The API does not imply download or rehosting permission.
+
+`CollectionDetail.mediaResearch` is the source matrix for the 28–30/09/2026 PFW SS27 audit. Every Collection has one IMAGE and one VIDEO cell for each registered source key (`FHCM`, `VOGUE`, `MAISON`, `NOWFASHION`, `OUI`, `TAGWALK`, `LAUNCHMETRICS`, `YOUTUBE`, `FF_CHANNEL`, `FASHION_CHANNEL`, `OTHER`). Each cell carries `state`, `checkedAt`, `sourcePageUrl`, `resultCount`, `reason` and optional metadata. `NEEDS_RESEARCH` is only emitted with a registered research location and explicit reason.
 
 ## CORS
 
@@ -92,8 +94,12 @@ Maison, Collection or Term rows. Gemini is preferred, Workers AI is a limited
 fallback for lightweight tasks, and unavailable providers are recorded as
 `BLOCKED`.
 
-Third-party media remains URL/embed/provenance metadata. Removed media is
-retained for audit but omitted from playable collection `videos` and media
-status. The Julie Kegels NSS Instagram reel is therefore `REMOVED`/`LINK_ONLY`
-and must not be rendered as a player. The Dior Vogue item remains a
+Third-party media remains URL/embed/provenance metadata. Instagram/Facebook are
+radar/provenance only: their `originalUrl` is retained, but their embed and
+remote URL are never selected as primary playback. If no reproducible
+alternative exists, the asset is `LINK_ONLY` with
+`NEEDS_ALTERNATIVE_VIDEO_SOURCE`. Removed media is retained for audit but
+omitted from playable collection `videos` and media status. The Julie Kegels
+NSS Instagram reel is therefore `REMOVED`/`LINK_ONLY` and must not be
+rendered as a player. The Dior Vogue item remains a
 partial-coverage `LINK_ONLY` record until reproducible playback is verified.

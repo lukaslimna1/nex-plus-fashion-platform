@@ -32,4 +32,16 @@ describe("inline-first media resolver", () => {
   it("rejects non-https media before selecting the next fallback", () => {
     expect(resolveMedia({ ...asset, remoteUrl: "javascript:alert(1)", alternativeUrls: [] }, { placeholderUrl: "https://example.com/placeholder.svg" }).kind).toBe("thumbnail");
   });
+  it("never promotes Instagram or Facebook to primary playback", () => {
+    const metaAsset = { ...asset, assetKind: "VIDEO" as const, provider: "instagram", providerAssetId: "Dd1bejCMjsx", remoteUrl: "https://www.instagram.com/reel/Dd1bejCMjsx/", embedUrl: "https://www.instagram.com/reel/Dd1bejCMjsx/embed/", thumbnailUrl: "https://example.com/meta-thumbnail.jpg", alternativeUrls: [] };
+    const resolution = resolveMedia(metaAsset, { placeholderUrl: "https://example.com/placeholder.svg" });
+    expect(resolution.kind).toBe("thumbnail");
+    expect(resolution.url).not.toContain("instagram");
+  });
+  it("uses a verified stable alternative when the original provider is Meta", () => {
+    const metaAsset = { ...asset, assetKind: "VIDEO" as const, provider: "facebook", remoteUrl: "https://www.facebook.com/reel/123", alternativeUrls: ["https://www.youtube.com/watch?v=verified"] };
+    const resolution = resolveMedia(metaAsset, { placeholderUrl: "https://example.com/placeholder.svg" });
+    expect(resolution.kind).toBe("alternative");
+    expect(resolution.url).toBe(metaAsset.alternativeUrls[0]);
+  });
 });

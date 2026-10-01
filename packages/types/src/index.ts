@@ -28,7 +28,7 @@ export type MediaProvider = "youtube" | "instagram" | "vimeo" | "tiktok" | "face
 export type VideoOrientation = "LANDSCAPE" | "PORTRAIT" | "SQUARE" | "UNKNOWN";
 export type PlaybackMode = "YOUTUBE_EMBED" | "INSTAGRAM_EMBED" | "VIMEO_EMBED" | "TIKTOK_EMBED" | "FACEBOOK_EMBED" | "WEBSITE_EMBED" | "HTML5_VIDEO" | "EXTERNAL_LINK";
 export type VideoAvailabilityStatus = "AVAILABLE" | "REGION_RESTRICTED" | "REMOVED" | "UNKNOWN";
-export type MediaStatus = "COMPLETE" | "PARTIAL" | "NEEDS_RESEARCH" | "NO_MEDIA_FOUND";
+export type MediaStatus = "COMPLETE_MULTI_SOURCE" | "COMPLETE_SINGLE_SOURCE" | "PARTIAL" | "IMAGES_ONLY" | "VIDEO_ONLY" | "NO_MEDIA_FOUND" | "SOURCE_BLOCKED" | "NEEDS_RESEARCH";
 export interface CollectionMediaStatus {
   status: MediaStatus;
   runwayImages: number;
@@ -38,6 +38,12 @@ export interface CollectionMediaStatus {
   otherVideos: number;
   officialSource: boolean;
   editorialSources: number;
+}
+export type MediaResearchState = "FOUND" | "EMPTY" | "BLOCKED" | "REQUIRES_ACCESS" | "NOT_APPLICABLE" | "NEEDS_RESEARCH";
+export interface MediaResearchCell {
+  id: Id; collectionId: Id; sourceKey: string; sourceId?: Id; mediaType: "IMAGE" | "VIDEO";
+  state: MediaResearchState; checkedAt: ISODateTime; sourcePageUrl?: string; resultCount: number;
+  reason: string; metadata?: Record<string, unknown>;
 }
 export type CanonicalStatus = "DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED" | "CANONICAL";
 export type AIOutputStatus = "AI_DRAFT" | "PENDING_REVIEW" | "VALIDATED" | "REJECTED";
@@ -99,7 +105,7 @@ export interface Edition {
   startsOn?: CivilDate; endsOn?: CivilDate; status: CanonicalStatus;
 }
 export interface ScheduleEntry {
-  id: Id; editionId: Id; eventId: Id; segmentId?: Id; cityHubId: Id;
+  id: Id; editionId: Id; eventId: Id; segmentId?: Id; cityHubId: Id; collectionId?: Id;
   title: string; format: "SHOW" | "PRESENTATION" | "FILM" | "OTHER";
   startTime: ISODateTime; endTime?: ISODateTime | undefined; timezone: string;
   verificationStatus: ScheduleVerificationStatus; officialUrl?: string; sourcePageUrl?: string; livestreamUrl?: string;
@@ -130,7 +136,7 @@ export interface Source {
   automationNotes?: string; lastVerifiedAt?: ISODateTime; active: boolean;
 }
 export interface Asset {
-  id: Id; collectionId?: Id; title?: string; sourcePageUrl: string; remoteUrl?: string;
+  id: Id; collectionId?: Id; title?: string; sourcePageUrl: string; originalUrl?: string; remoteUrl?: string;
   embedUrl?: string; provider?: string; providerAssetId?: string; thumbnailUrl?: string;
   alternativeUrls: string[]; creator?: string; photographer?: string; creditLine?: string;
   sourceIds: Id[]; sourceId?: Id; rightsStatus: RightsStatus; downloadPolicy: DownloadPolicy;
@@ -207,6 +213,7 @@ export interface CollectionDetail {
   sources: Source[];
   reviews: ProfessionalReview[];
   tags: Tag[];
+  mediaResearch: MediaResearchCell[];
   mediaStatus: CollectionMediaStatus;
 }
 export interface ImageGroup { sourceId: Id; coverageType: CoverageType; source?: Source; assets: Asset[]; }
