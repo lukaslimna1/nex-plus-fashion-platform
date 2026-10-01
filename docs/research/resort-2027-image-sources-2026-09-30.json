@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "image-source-registry-v1",
+  "retrievedAt": "2026-09-30T00:00:00.000Z",
+  "scope": "Resort 2027 image-source pointers",
+  "sources": [
+    {
+      "id": "source-wwd",
+      "canonicalName": "WWD",
+      "type": "RUNWAY_COVERAGE",
+      "baseUrl": "https://wwd.com/runway/resort-2027/paris/",
+      "authorityTier": "C",
+      "language": "en",
+      "coverageScope": ["resort", "paris", "runway", "images", "credits"],
+      "accessMode": "PAYWALLED",
+      "verification": {
+        "status": "HTTP_402_PAYMENT_REQUIRED",
+        "checkedAt": "2026-09-30T00:00:00.000Z"
+      },
+      "usage": "IMAGE_PROVENANCE_AND_LINK_ONLY",
+      "rightsStatus": "UNKNOWN",
+      "downloadPolicy": "DOWNLOAD_BLOCKED",
+      "notes": "User-requested image source. No scraping or download was performed; page access or license is required."
+    },
+    {
+      "id": "source-vogue-resort",
+      "canonicalName": "Vogue Runway",
+      "type": "RUNWAY_COVERAGE",
+      "baseUrl": "https://www.vogue.com/fashion-shows/resort-2027",
+      "authorityTier": "C",
+      "language": "en",
+      "coverageScope": ["resort", "collections", "runway", "images", "credits"],
+      "accessMode": "PUBLIC",
+      "verification": {
+        "status": "HTTP_200_TITLE_RESORT_2027",
+        "checkedAt": "2026-09-30T00:00:00.000Z"
+      },
+      "usage": "IMAGE_PROVENANCE_AND_REMOTE_REFERENCE",
+      "rightsStatus": "UNKNOWN",
+      "downloadPolicy": "DOWNLOAD_BLOCKED",
+      "notes": "User-requested source pointer. Item-level credits and rights remain required; no automatic rehosting."
+    }
+  ]
+}
