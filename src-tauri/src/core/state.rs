@@ -1,3 +1,4 @@
+use crate::core::adapter::AdapterRegistry;
 use crate::core::ai::AiRouter;
 use crate::core::db::CatalogDb;
 use crate::core::error::CoreError;
@@ -8,6 +9,7 @@ pub struct CoreState {
     pub database: Mutex<CatalogDb>,
     pub packs: PackRuntime,
     pub ai: AiRouter,
+    pub adapters: AdapterRegistry,
 }
 
 impl CoreState {
@@ -24,6 +26,7 @@ impl CoreState {
             database: Mutex::new(database),
             packs,
             ai: AiRouter::from_env(),
+            adapters: AdapterRegistry::built_in(),
         })
     }
 }

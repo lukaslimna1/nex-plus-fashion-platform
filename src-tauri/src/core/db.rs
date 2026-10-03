@@ -1,3 +1,7 @@
+use crate::core::adapter::{
+    AdapterCandidateRequest, AdapterHealth, AdapterSpec, IntegrationProposalRequest,
+    ObservationInput, RawArtifactInput, SourceCandidateRequest,
+};
 use crate::core::ai::{
     AiCandidateRead, AiCandidateRecord, AiExecutionRead, AiExecutionRecord, AiRunResult,
     AiTargetRef, CuratorProposalDecisionRequest, CuratorProposalRead, CuratorProposalRecord,
@@ -13,10 +17,11 @@ use crate::core::read::{
 };
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::path::Path;
 
-const MIGRATIONS: [(&str, &str); 6] = [
+const MIGRATIONS: [(&str, &str); 7] = [
     ("0001_core", include_str!("../../migrations/0001_core.sql")),
     ("0002_fts5", include_str!("../../migrations/0002_fts5.sql")),
     (
@@ -34,6 +39,10 @@ const MIGRATIONS: [(&str, &str); 6] = [
     (
         "0006_ai_curator",
         include_str!("../../migrations/0006_ai_curator.sql"),
+    ),
+    (
+        "0007_adapter_framework",
+        include_str!("../../migrations/0007_adapter_framework.sql"),
     ),
 ];
 
@@ -171,6 +180,145 @@ pub struct PackRuntimeRow {
     pub last_error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdapterRunRead {
+    pub run_id: String,
+    pub adapter_id: String,
+    pub source_id: Option<String>,
+    pub requested_capability: Option<String>,
+    pub status: String,
+    pub cursor: Option<String>,
+    pub checkpoint: Value,
+    pub fixture_mode: bool,
+    pub attempts: u32,
+    pub artifact_count: u32,
+    pub observation_count: u32,
+    pub candidate_count: u32,
+    pub changed_count: u32,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RawArtifactStored {
+    pub artifact_id: String,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RawArtifactRead {
+    pub artifact_id: String,
+    pub source_id: Option<String>,
+    pub adapter_id: String,
+    pub integration_id: Option<String>,
+    pub canonical_url: String,
+    pub content_type: String,
+    pub content_hash: String,
+    pub byte_size: u64,
+    pub storage_kind: String,
+    pub content_ref: Option<String>,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+    pub retrieved_at: String,
+    pub retrieval_status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct IngestionCandidateRecord {
+    pub candidate_id: String,
+    pub source_id: Option<String>,
+    pub adapter_id: String,
+    pub run_id: String,
+    pub candidate_kind: String,
+    pub target_entity_type: Option<String>,
+    pub target_entity_id: Option<String>,
+    pub stable_key: String,
+    pub proposed: Value,
+    pub evidence: Vec<Value>,
+    pub provenance: Vec<Value>,
+    pub comparison_state: String,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngestionCandidateRead {
+    pub candidate_id: String,
+    pub source_id: Option<String>,
+    pub adapter_id: String,
+    pub run_id: String,
+    pub candidate_kind: String,
+    pub target_entity_type: Option<String>,
+    pub target_entity_id: Option<String>,
+    pub stable_key: String,
+    pub proposed: Value,
+    pub evidence: Vec<Value>,
+    pub provenance: Vec<Value>,
+    pub comparison_state: String,
+    pub content_hash: String,
+    pub status: String,
+    pub seen_count: u32,
+    pub first_seen_at: String,
+    pub last_seen_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct IngestionCandidateUpsert {
+    pub changed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceCandidateRead {
+    pub source_candidate_id: String,
+    pub source_key: String,
+    pub display_name: String,
+    pub base_url: Option<String>,
+    pub source_kind: Option<String>,
+    pub domains: Vec<String>,
+    pub locale: BTreeMap<String, String>,
+    pub capabilities: Vec<String>,
+    pub evidence: Vec<Value>,
+    pub provenance: Vec<Value>,
+    pub discovered_by: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdapterCandidateRead {
+    pub adapter_candidate_id: String,
+    pub source_candidate_id: Option<String>,
+    pub adapter_id: Option<String>,
+    pub proposed: Value,
+    pub capabilities: Vec<String>,
+    pub evidence: Vec<Value>,
+    pub provenance: Vec<Value>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationProposalRead {
+    pub integration_proposal_id: String,
+    pub source_candidate_id: Option<String>,
+    pub adapter_candidate_id: Option<String>,
+    pub source_id: Option<String>,
+    pub adapter_id: Option<String>,
+    pub proposal: Value,
+    pub evidence: Vec<Value>,
+    pub provenance: Vec<Value>,
+    pub state: String,
+    pub reviewer: Option<String>,
+    pub decision_reason: Option<String>,
+    pub decided_at: Option<String>,
+    pub official_applied: bool,
+}
+
 pub struct CatalogDb {
     connection: Connection,
 }
@@ -237,6 +385,842 @@ impl CatalogDb {
                 row.get(0)
             })
             .map_err(CoreError::from)
+    }
+
+    pub fn upsert_adapter_spec(
+        &mut self,
+        spec: &AdapterSpec,
+        health: &AdapterHealth,
+        now: &str,
+    ) -> Result<(), CoreError> {
+        let source_ids = serde_json::to_string(&spec.source_ids)?;
+        let integration_ids = serde_json::to_string(&spec.integration_ids)?;
+        let capabilities = serde_json::to_string(&spec.capabilities)?;
+        let content_types = serde_json::to_string(&spec.supported_content_types)?;
+        let pagination = serde_json::to_string(&spec.pagination)?;
+        let rate_limit = serde_json::to_string(&spec.rate_limit)?;
+        let retry_policy = serde_json::to_string(&spec.retry_policy)?;
+        let produces = serde_json::to_string(&spec.produces)?;
+        self.connection.execute(
+            "INSERT INTO adapter_registry
+             (adapter_id, version, source_ids_json, integration_ids_json, capabilities_json,
+              discovery_strategy, supported_content_types_json, fetch_strategy, parse_strategy,
+              normalization_strategy, pagination_json, rate_limit_json, retry_policy_json,
+              provenance_support, produces_json, fixture_support, test_support, health_state,
+              health_detail, last_checked_at, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+                     ?16, ?17, ?18, ?19, ?20, ?21, ?21)
+             ON CONFLICT(adapter_id) DO UPDATE SET
+              version=excluded.version, source_ids_json=excluded.source_ids_json,
+              integration_ids_json=excluded.integration_ids_json,
+              capabilities_json=excluded.capabilities_json,
+              discovery_strategy=excluded.discovery_strategy,
+              supported_content_types_json=excluded.supported_content_types_json,
+              fetch_strategy=excluded.fetch_strategy, parse_strategy=excluded.parse_strategy,
+              normalization_strategy=excluded.normalization_strategy,
+              pagination_json=excluded.pagination_json, rate_limit_json=excluded.rate_limit_json,
+              retry_policy_json=excluded.retry_policy_json,
+              provenance_support=excluded.provenance_support, produces_json=excluded.produces_json,
+              fixture_support=excluded.fixture_support, test_support=excluded.test_support,
+              health_state=excluded.health_state, health_detail=excluded.health_detail,
+              last_checked_at=excluded.last_checked_at, updated_at=excluded.updated_at",
+            params![
+                spec.adapter_id,
+                spec.version,
+                source_ids,
+                integration_ids,
+                capabilities,
+                spec.discovery_strategy,
+                content_types,
+                spec.fetch_strategy,
+                spec.parse_strategy,
+                spec.normalization_strategy,
+                pagination,
+                rate_limit,
+                retry_policy,
+                i32::from(spec.provenance_support),
+                produces,
+                i32::from(spec.fixture_support),
+                i32::from(spec.test_support),
+                health.state.as_str(),
+                health.detail,
+                health.checked_at.as_deref(),
+                now,
+            ],
+        )?;
+        for integration_id in &spec.integration_ids {
+            let endpoint = match integration_id.as_str() {
+                "integration:cnmi:milano-calendar" => {
+                    "https://milanofashionweek.cameramoda.it/en/calendar"
+                }
+                "integration:bof:review-page" => {
+                    "https://www.businessoffashion.com/reviews/fashion-week/"
+                }
+                _ => "",
+            };
+            self.connection.execute(
+                "INSERT INTO integration_registry
+                 (integration_id, source_id, adapter_id, endpoint_id, status, method, endpoint,
+                  auth_policy, rate_limit_json, cost_policy, health_state, health_detail,
+                  last_checked_at, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, NULL, 'active', ?4, ?5, 'none', ?6, 'ZERO', ?7, ?8,
+                         ?9, ?9, ?9)
+                 ON CONFLICT(integration_id) DO UPDATE SET source_id=excluded.source_id,
+                  adapter_id=excluded.adapter_id, status=excluded.status, method=excluded.method,
+                  endpoint=excluded.endpoint, rate_limit_json=excluded.rate_limit_json,
+                  cost_policy=excluded.cost_policy, health_state=excluded.health_state,
+                  health_detail=excluded.health_detail, last_checked_at=excluded.last_checked_at,
+                  updated_at=excluded.updated_at",
+                params![
+                    integration_id,
+                    spec.source_ids.first(),
+                    spec.adapter_id,
+                    spec.fetch_strategy,
+                    endpoint,
+                    serde_json::to_string(&spec.rate_limit)?,
+                    health.state.as_str(),
+                    health.detail,
+                    now,
+                ],
+            )?;
+        }
+        for source_id in &spec.source_ids {
+            self.connection.execute(
+                "INSERT INTO source_health
+                 (source_id, state, detail, last_checked_at, adapter_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(source_id) DO UPDATE SET
+                  state=excluded.state, detail=excluded.detail,
+                  last_checked_at=excluded.last_checked_at, adapter_id=excluded.adapter_id",
+                params![
+                    source_id,
+                    health.state.as_str(),
+                    health.detail,
+                    health.checked_at.as_deref().unwrap_or(now),
+                    spec.adapter_id
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn start_adapter_run(
+        &mut self,
+        run_id: &str,
+        adapter_id: &str,
+        source_id: &str,
+        capability: Option<&str>,
+        cursor: Option<&str>,
+        checkpoint_key: Option<&str>,
+        fixture_mode: bool,
+        now: &str,
+    ) -> Result<(), CoreError> {
+        let checkpoint = json!({
+            "key": checkpoint_key,
+            "cursor": cursor,
+        });
+        self.connection.execute(
+            "INSERT INTO adapter_run
+             (run_id, adapter_id, source_id, requested_capability, status, cursor,
+              checkpoint_json, fixture_mode, attempts, started_at)
+             VALUES (?1, ?2, ?3, ?4, 'running', ?5, ?6, ?7, 1, ?8)",
+            params![
+                run_id,
+                adapter_id,
+                source_id,
+                capability,
+                cursor,
+                serde_json::to_string(&checkpoint)?,
+                i32::from(fixture_mode),
+                now
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn finish_adapter_run(
+        &mut self,
+        run_id: &str,
+        status: &str,
+        artifact_count: u32,
+        observation_count: u32,
+        candidate_count: u32,
+        changed_count: u32,
+        cursor: Option<&str>,
+        error_code: Option<&str>,
+        error_message: Option<&str>,
+        completed_at: &str,
+    ) -> Result<(), CoreError> {
+        let changed = self.connection.execute(
+            "UPDATE adapter_run
+             SET status=?1, artifact_count=?2, observation_count=?3, candidate_count=?4,
+                 changed_count=?5, cursor=?6, error_code=?7, error_message=?8, completed_at=?9,
+                 checkpoint_json=json_set(checkpoint_json, '$.cursor', ?6)
+             WHERE run_id=?10",
+            params![
+                status,
+                i64::from(artifact_count),
+                i64::from(observation_count),
+                i64::from(candidate_count),
+                i64::from(changed_count),
+                cursor,
+                error_code,
+                error_message,
+                completed_at,
+                run_id
+            ],
+        )?;
+        if changed == 0 {
+            return Err(CoreError::NotFound {
+                resource: "adapter_run".to_string(),
+                id: run_id.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn adapter_run(&self, run_id: &str) -> Result<Option<AdapterRunRead>, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT run_id, adapter_id, source_id, requested_capability, status, cursor,
+                        checkpoint_json, fixture_mode, attempts, artifact_count, observation_count,
+                        candidate_count, changed_count, error_code, error_message, started_at,
+                        completed_at
+                 FROM adapter_run WHERE run_id=?1",
+                [run_id],
+                read_adapter_run,
+            )
+            .optional()
+            .map_err(CoreError::from)
+    }
+
+    pub fn adapter_runs(&self, limit: u32) -> Result<Vec<AdapterRunRead>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT run_id, adapter_id, source_id, requested_capability, status, cursor,
+                    checkpoint_json, fixture_mode, attempts, artifact_count, observation_count,
+                    candidate_count, changed_count, error_code, error_message, started_at,
+                    completed_at
+             FROM adapter_run ORDER BY started_at DESC, run_id DESC LIMIT ?1",
+        )?;
+        let rows = statement
+            .query_map([i64::from(limit.clamp(1, 200))], read_adapter_run)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn raw_artifacts(
+        &self,
+        adapter_id: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<RawArtifactRead>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT artifact_id, source_id, adapter_id, integration_id, canonical_url,
+                    content_type, content_hash, byte_size, storage_kind, content_ref, etag,
+                    last_modified, retrieved_at, retrieval_status
+             FROM raw_artifact
+             WHERE (?1='' OR adapter_id=?1)
+             ORDER BY retrieved_at DESC, artifact_id DESC LIMIT ?2",
+        )?;
+        let rows = statement
+            .query_map(
+                params![adapter_id.unwrap_or(""), i64::from(limit.clamp(1, 200))],
+                read_raw_artifact,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn ingestion_candidates(
+        &self,
+        adapter_id: Option<&str>,
+        status: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<IngestionCandidateRead>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT candidate_id, source_id, adapter_id, run_id, candidate_kind,
+                    target_entity_type, target_entity_id, stable_key, proposed_json,
+                    evidence_json, provenance_json, comparison_state, content_hash, status,
+                    seen_count, first_seen_at, last_seen_at
+             FROM ingestion_candidate
+             WHERE (?1='' OR adapter_id=?1) AND (?2='' OR status=?2)
+             ORDER BY updated_at DESC, candidate_id DESC LIMIT ?3",
+        )?;
+        let rows = statement
+            .query_map(
+                params![
+                    adapter_id.unwrap_or(""),
+                    status.unwrap_or(""),
+                    i64::from(limit.clamp(1, 200))
+                ],
+                read_ingestion_candidate,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn upsert_raw_artifact(
+        &mut self,
+        raw: &RawArtifactInput,
+        adapter_id: &str,
+    ) -> Result<RawArtifactStored, CoreError> {
+        let canonical_url = normalize_source_url(&raw.canonical_url);
+        let content_hash = sha256_bytes(raw.content.as_bytes());
+        let existing = self
+            .connection
+            .query_row(
+                "SELECT artifact_id FROM raw_artifact
+                 WHERE adapter_id=?1 AND canonical_url=?2 AND content_hash=?3",
+                params![adapter_id, canonical_url, content_hash],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let artifact_id =
+            existing.unwrap_or_else(|| format!("artifact:{adapter_id}:{content_hash}"));
+        self.connection.execute(
+            "INSERT INTO raw_artifact
+             (artifact_id, source_id, adapter_id, integration_id, canonical_url, content_type,
+              content_hash, byte_size, storage_kind, content_text, content_ref, etag,
+              last_modified, retrieved_at, retrieval_status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'inline', ?9, ?10, ?11, ?12,
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'acquired',
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+             ON CONFLICT(adapter_id, canonical_url, content_hash) DO UPDATE SET
+              source_id=excluded.source_id, integration_id=excluded.integration_id,
+              content_type=excluded.content_type, byte_size=excluded.byte_size,
+              content_text=excluded.content_text, content_ref=excluded.content_ref,
+              etag=excluded.etag, last_modified=excluded.last_modified,
+              retrieved_at=excluded.retrieved_at, retrieval_status=excluded.retrieval_status,
+              updated_at=excluded.updated_at",
+            params![
+                artifact_id,
+                raw.source_id,
+                adapter_id,
+                raw.integration_id,
+                canonical_url,
+                raw.content_type,
+                content_hash,
+                i64::try_from(raw.content.len()).unwrap_or(i64::MAX),
+                raw.content,
+                raw.content_ref,
+                raw.etag,
+                raw.last_modified,
+            ],
+        )?;
+        Ok(RawArtifactStored {
+            artifact_id,
+            content_hash,
+        })
+    }
+
+    pub fn upsert_source_observation(
+        &mut self,
+        artifact_id: &str,
+        source_id: &str,
+        adapter_id: &str,
+        observation: &ObservationInput,
+    ) -> Result<String, CoreError> {
+        let observed_json = serde_json::to_string(&observation.payload)?;
+        let content_hash = sha256_bytes(observed_json.as_bytes());
+        let observation_id = format!(
+            "observation:{adapter_id}:{}",
+            sha256_bytes(format!("{}:{content_hash}", observation.stable_key).as_bytes())
+        );
+        self.connection.execute(
+            "INSERT INTO source_observation
+             (observation_id, artifact_id, source_id, adapter_id, entity_type, stable_key,
+              observed_json, content_hash, parser_version, observed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '1.0', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+             ON CONFLICT(artifact_id, entity_type, stable_key, content_hash) DO UPDATE SET
+              observed_json=excluded.observed_json, observed_at=excluded.observed_at",
+            params![
+                observation_id,
+                artifact_id,
+                source_id,
+                adapter_id,
+                observation.entity_type,
+                observation.stable_key,
+                observed_json,
+                content_hash
+            ],
+        )?;
+        Ok(observation_id)
+    }
+
+    pub fn compare_ingestion_candidate(
+        &self,
+        entity_type: Option<&str>,
+        entity_id: Option<&str>,
+        proposed: &Value,
+    ) -> Result<String, CoreError> {
+        let (Some(entity_type), Some(entity_id)) = (entity_type, entity_id) else {
+            return Ok("UNKNOWN".to_string());
+        };
+        match entity_type {
+            "schedule_entry" => {
+                let official = self
+                    .connection
+                    .query_row(
+                        "SELECT source_hash FROM schedule_entry WHERE id=?1",
+                        [entity_id],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .optional()?;
+                let Some(official) = official else {
+                    return Ok("MISSING".to_string());
+                };
+                let proposed_hash = proposed
+                    .get("sourceHash")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                Ok(if official == proposed_hash {
+                    "MATCHED"
+                } else {
+                    "CHANGED"
+                }
+                .to_string())
+            }
+            "review" => {
+                let exists = self
+                    .connection
+                    .query_row(
+                        "SELECT 1 FROM catalog_review WHERE id=?1",
+                        [entity_id],
+                        |_| Ok(true),
+                    )
+                    .optional()?
+                    .unwrap_or(false);
+                Ok(if exists { "MATCHED" } else { "MISSING" }.to_string())
+            }
+            _ => {
+                let exists = self
+                    .connection
+                    .query_row(
+                        "SELECT 1 FROM catalog_entity WHERE id=?1",
+                        [entity_id],
+                        |_| Ok(true),
+                    )
+                    .optional()?
+                    .unwrap_or(false);
+                Ok(if exists { "MATCHED" } else { "MISSING" }.to_string())
+            }
+        }
+    }
+
+    pub fn upsert_ingestion_candidate(
+        &mut self,
+        record: &IngestionCandidateRecord,
+    ) -> Result<IngestionCandidateUpsert, CoreError> {
+        let proposed = serde_json::to_string(&record.proposed)?;
+        let evidence = serde_json::to_string(&record.evidence)?;
+        let provenance = serde_json::to_string(&record.provenance)?;
+        let old_hash = self
+            .connection
+            .query_row(
+                "SELECT content_hash FROM ingestion_candidate
+                 WHERE adapter_id=?1 AND stable_key=?2",
+                params![record.adapter_id, record.stable_key],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let changed = old_hash
+            .as_deref()
+            .is_some_and(|hash| hash != record.content_hash);
+        self.connection.execute(
+            "INSERT INTO ingestion_candidate
+             (candidate_id, source_id, adapter_id, run_id, candidate_kind, target_entity_type,
+              target_entity_id, stable_key, proposed_json, evidence_json, provenance_json,
+              comparison_state, content_hash, status, seen_count, first_seen_at, last_seen_at,
+              created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'open', 1,
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+             ON CONFLICT(adapter_id, stable_key) DO UPDATE SET
+              source_id=excluded.source_id, run_id=excluded.run_id,
+              proposed_json=excluded.proposed_json, evidence_json=excluded.evidence_json,
+              provenance_json=excluded.provenance_json,
+              comparison_state=excluded.comparison_state, content_hash=excluded.content_hash,
+              seen_count=ingestion_candidate.seen_count + 1,
+              last_seen_at=excluded.last_seen_at, updated_at=excluded.updated_at",
+            params![
+                record.candidate_id,
+                record.source_id,
+                record.adapter_id,
+                record.run_id,
+                record.candidate_kind,
+                record.target_entity_type,
+                record.target_entity_id,
+                record.stable_key,
+                proposed,
+                evidence,
+                provenance,
+                record.comparison_state,
+                record.content_hash,
+            ],
+        )?;
+        Ok(IngestionCandidateUpsert { changed })
+    }
+
+    pub fn upsert_ingestion_proposal(
+        &mut self,
+        candidate_id: &str,
+        proposal_kind: &str,
+        proposed: &Value,
+        evidence: &[Value],
+        provenance: &[Value],
+        comparison_state: &str,
+        reset_review: bool,
+    ) -> Result<(), CoreError> {
+        self.connection.execute(
+            "INSERT INTO ingestion_proposal
+             (proposal_id, candidate_id, proposal_kind, state, proposed_json, evidence_json,
+              provenance_json, comparison_state, official_applied, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, 0,
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+             ON CONFLICT(candidate_id) DO UPDATE SET
+              proposal_kind=excluded.proposal_kind, proposed_json=excluded.proposed_json,
+              evidence_json=excluded.evidence_json, provenance_json=excluded.provenance_json,
+              comparison_state=excluded.comparison_state,
+              state=CASE WHEN ?8=1 THEN 'pending' ELSE ingestion_proposal.state END,
+              official_applied=CASE WHEN ?8=1 THEN 0 ELSE ingestion_proposal.official_applied END,
+              reviewer=CASE WHEN ?8=1 THEN NULL ELSE ingestion_proposal.reviewer END,
+              decision_reason=CASE WHEN ?8=1 THEN NULL ELSE ingestion_proposal.decision_reason END,
+              decided_at=CASE WHEN ?8=1 THEN NULL ELSE ingestion_proposal.decided_at END,
+              updated_at=excluded.updated_at",
+            params![
+                format!("proposal:ingestion:{candidate_id}"),
+                candidate_id,
+                proposal_kind,
+                serde_json::to_string(proposed)?,
+                serde_json::to_string(evidence)?,
+                serde_json::to_string(provenance)?,
+                comparison_state,
+                i32::from(reset_review)
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn upsert_ingestion_checkpoint(
+        &mut self,
+        adapter_id: &str,
+        source_id: &str,
+        checkpoint_key: &str,
+        cursor: Option<&str>,
+        content_hash: Option<&str>,
+        updated_at: &str,
+    ) -> Result<(), CoreError> {
+        self.connection.execute(
+            "INSERT INTO ingestion_checkpoint
+             (adapter_id, source_id, checkpoint_key, cursor, content_hash, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(adapter_id, source_id, checkpoint_key) DO UPDATE SET
+              cursor=excluded.cursor, content_hash=excluded.content_hash,
+              updated_at=excluded.updated_at",
+            params![
+                adapter_id,
+                source_id,
+                checkpoint_key,
+                cursor,
+                content_hash,
+                updated_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn upsert_source_candidate(
+        &mut self,
+        request: &SourceCandidateRequest,
+    ) -> Result<SourceCandidateRead, CoreError> {
+        let id = format!("source-candidate:{}", request.source_key);
+        self.connection.execute(
+            "INSERT INTO source_candidate
+             (source_candidate_id, source_key, display_name, base_url, source_kind,
+              domains_json, locale_json, capabilities_json, evidence_json, provenance_json,
+              discovered_by, status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'pending',
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+             ON CONFLICT(source_key) DO UPDATE SET
+              display_name=excluded.display_name, base_url=excluded.base_url,
+              source_kind=excluded.source_kind, domains_json=excluded.domains_json,
+              locale_json=excluded.locale_json, capabilities_json=excluded.capabilities_json,
+              evidence_json=excluded.evidence_json, provenance_json=excluded.provenance_json,
+              discovered_by=excluded.discovered_by, updated_at=excluded.updated_at",
+            params![
+                id,
+                request.source_key,
+                request.display_name,
+                request.base_url,
+                request.source_kind,
+                serde_json::to_string(&request.domains)?,
+                serde_json::to_string(&request.locale)?,
+                serde_json::to_string(&request.capabilities)?,
+                serde_json::to_string(&request.evidence)?,
+                serde_json::to_string(&request.provenance)?,
+                request.discovered_by.as_deref().unwrap_or("curator")
+            ],
+        )?;
+        self.source_candidate(&id)?
+            .ok_or_else(|| CoreError::NotFound {
+                resource: "source_candidate".to_string(),
+                id,
+            })
+    }
+
+    pub fn create_adapter_candidate(
+        &mut self,
+        request: &AdapterCandidateRequest,
+    ) -> Result<AdapterCandidateRead, CoreError> {
+        let id = new_db_id("adapter-candidate");
+        self.connection.execute(
+            "INSERT INTO adapter_candidate
+             (adapter_candidate_id, source_candidate_id, adapter_id, proposed_json,
+              capabilities_json, evidence_json, provenance_json, status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'pending',
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            params![
+                id,
+                request.source_candidate_id,
+                request.adapter_id,
+                serde_json::to_string(&request.proposed)?,
+                serde_json::to_string(&request.capabilities)?,
+                serde_json::to_string(&request.evidence)?,
+                serde_json::to_string(&request.provenance)?
+            ],
+        )?;
+        self.adapter_candidate(&id)?
+            .ok_or_else(|| CoreError::NotFound {
+                resource: "adapter_candidate".to_string(),
+                id,
+            })
+    }
+
+    pub fn create_integration_proposal(
+        &mut self,
+        request: &IntegrationProposalRequest,
+    ) -> Result<IntegrationProposalRead, CoreError> {
+        let id = new_db_id("integration-proposal");
+        self.connection.execute(
+            "INSERT INTO integration_proposal
+             (integration_proposal_id, source_candidate_id, adapter_candidate_id, source_id,
+              adapter_id, proposal_json, evidence_json, provenance_json, state, official_applied,
+              created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', 0,
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            params![
+                id,
+                request.source_candidate_id,
+                request.adapter_candidate_id,
+                request.source_id,
+                request.adapter_id,
+                serde_json::to_string(&request.proposal)?,
+                serde_json::to_string(&request.evidence)?,
+                serde_json::to_string(&request.provenance)?
+            ],
+        )?;
+        self.integration_proposal(&id)?
+            .ok_or_else(|| CoreError::NotFound {
+                resource: "integration_proposal".to_string(),
+                id,
+            })
+    }
+
+    pub fn source_candidate(&self, id: &str) -> Result<Option<SourceCandidateRead>, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT source_candidate_id, source_key, display_name, base_url, source_kind,
+                    domains_json, locale_json, capabilities_json, evidence_json,
+                    provenance_json, discovered_by, status
+             FROM source_candidate WHERE source_candidate_id=?1",
+                [id],
+                read_source_candidate,
+            )
+            .optional()
+            .map_err(CoreError::from)
+    }
+
+    pub fn adapter_candidate(&self, id: &str) -> Result<Option<AdapterCandidateRead>, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT adapter_candidate_id, source_candidate_id, adapter_id, proposed_json,
+                    capabilities_json, evidence_json, provenance_json, status
+             FROM adapter_candidate WHERE adapter_candidate_id=?1",
+                [id],
+                read_adapter_candidate,
+            )
+            .optional()
+            .map_err(CoreError::from)
+    }
+
+    pub fn integration_proposal(
+        &self,
+        id: &str,
+    ) -> Result<Option<IntegrationProposalRead>, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT integration_proposal_id, source_candidate_id, adapter_candidate_id,
+                    source_id, adapter_id, proposal_json, evidence_json, provenance_json,
+                    state, reviewer, decision_reason, decided_at, official_applied
+             FROM integration_proposal WHERE integration_proposal_id=?1",
+                [id],
+                read_integration_proposal,
+            )
+            .optional()
+            .map_err(CoreError::from)
+    }
+
+    pub fn source_candidates(
+        &self,
+        status: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<SourceCandidateRead>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT source_candidate_id, source_key, display_name, base_url, source_kind,
+                    domains_json, locale_json, capabilities_json, evidence_json,
+                    provenance_json, discovered_by, status
+             FROM source_candidate WHERE (?1='' OR status=?1)
+             ORDER BY updated_at DESC, source_candidate_id DESC LIMIT ?2",
+        )?;
+        let rows = statement
+            .query_map(
+                params![status.unwrap_or(""), i64::from(limit.clamp(1, 200))],
+                read_source_candidate,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn adapter_candidates(
+        &self,
+        status: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<AdapterCandidateRead>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT adapter_candidate_id, source_candidate_id, adapter_id, proposed_json,
+                    capabilities_json, evidence_json, provenance_json, status
+             FROM adapter_candidate WHERE (?1='' OR status=?1)
+             ORDER BY updated_at DESC, adapter_candidate_id DESC LIMIT ?2",
+        )?;
+        let rows = statement
+            .query_map(
+                params![status.unwrap_or(""), i64::from(limit.clamp(1, 200))],
+                read_adapter_candidate,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn integration_proposals(
+        &self,
+        state: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<IntegrationProposalRead>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT integration_proposal_id, source_candidate_id, adapter_candidate_id,
+                    source_id, adapter_id, proposal_json, evidence_json, provenance_json,
+                    state, reviewer, decision_reason, decided_at, official_applied
+             FROM integration_proposal WHERE (?1='' OR state=?1)
+             ORDER BY updated_at DESC, integration_proposal_id DESC LIMIT ?2",
+        )?;
+        let rows = statement
+            .query_map(
+                params![state.unwrap_or(""), i64::from(limit.clamp(1, 200))],
+                read_integration_proposal,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn ingestion_candidate_count(&self, adapter_id: &str) -> Result<i64, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT COUNT(*) FROM ingestion_candidate WHERE adapter_id=?1",
+                [adapter_id],
+                |row| row.get(0),
+            )
+            .map_err(CoreError::from)
+    }
+
+    pub fn ingestion_proposal_count(&self, adapter_id: &str) -> Result<i64, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT COUNT(*) FROM ingestion_proposal p
+             JOIN ingestion_candidate c ON c.candidate_id=p.candidate_id
+             WHERE c.adapter_id=?1",
+                [adapter_id],
+                |row| row.get(0),
+            )
+            .map_err(CoreError::from)
+    }
+
+    pub fn raw_artifact_count(&self, adapter_id: &str) -> Result<i64, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT COUNT(*) FROM raw_artifact WHERE adapter_id=?1",
+                [adapter_id],
+                |row| row.get(0),
+            )
+            .map_err(CoreError::from)
+    }
+
+    pub fn official_schedule_count(&self) -> Result<i64, CoreError> {
+        self.connection
+            .query_row("SELECT COUNT(*) FROM schedule_entry", [], |row| row.get(0))
+            .map_err(CoreError::from)
+    }
+
+    pub fn official_review_count(&self) -> Result<i64, CoreError> {
+        self.connection
+            .query_row("SELECT COUNT(*) FROM catalog_review", [], |row| row.get(0))
+            .map_err(CoreError::from)
+    }
+
+    pub fn ingestion_candidate_statuses(&self) -> Result<Vec<String>, CoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT DISTINCT status FROM ingestion_candidate ORDER BY status")?;
+        let rows = statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn ingestion_candidate_comparison_states(&self) -> Result<Vec<String>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT DISTINCT comparison_state
+             FROM ingestion_candidate ORDER BY comparison_state",
+        )?;
+        let rows = statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn ingestion_proposal_states(&self) -> Result<Vec<String>, CoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT DISTINCT state FROM ingestion_proposal ORDER BY state")?;
+        let rows = statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn ingestion_candidate_payload(&self, adapter_id: &str) -> Result<Value, CoreError> {
+        let payload: String = self.connection.query_row(
+            "SELECT proposed_json FROM ingestion_candidate
+             WHERE adapter_id=?1 ORDER BY candidate_id LIMIT 1",
+            [adapter_id],
+            |row| row.get(0),
+        )?;
+        Ok(serde_json::from_str(&payload)?)
     }
 
     pub fn persist_ai_success(
@@ -3403,6 +4387,174 @@ fn upsert_catalog_entity(
     Ok(())
 }
 
+fn sha256_bytes(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn normalize_source_url(value: &str) -> String {
+    value.trim().trim_end_matches('/').to_string()
+}
+
+fn new_db_id(prefix: &str) -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    format!("{prefix}:{nanos:x}")
+}
+
+fn read_adapter_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<AdapterRunRead> {
+    let checkpoint_json: String = row.get(6)?;
+    Ok(AdapterRunRead {
+        run_id: row.get(0)?,
+        adapter_id: row.get(1)?,
+        source_id: row.get(2)?,
+        requested_capability: row.get(3)?,
+        status: row.get(4)?,
+        cursor: row.get(5)?,
+        checkpoint: serde_json::from_str(&checkpoint_json).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                6,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })?,
+        fixture_mode: row.get::<_, i64>(7)? != 0,
+        attempts: row.get::<_, i64>(8)? as u32,
+        artifact_count: row.get::<_, i64>(9)? as u32,
+        observation_count: row.get::<_, i64>(10)? as u32,
+        candidate_count: row.get::<_, i64>(11)? as u32,
+        changed_count: row.get::<_, i64>(12)? as u32,
+        error_code: row.get(13)?,
+        error_message: row.get(14)?,
+        started_at: row.get(15)?,
+        completed_at: row.get(16)?,
+    })
+}
+
+fn read_raw_artifact(row: &rusqlite::Row<'_>) -> rusqlite::Result<RawArtifactRead> {
+    Ok(RawArtifactRead {
+        artifact_id: row.get(0)?,
+        source_id: row.get(1)?,
+        adapter_id: row.get(2)?,
+        integration_id: row.get(3)?,
+        canonical_url: row.get(4)?,
+        content_type: row.get(5)?,
+        content_hash: row.get(6)?,
+        byte_size: row.get::<_, i64>(7)?.max(0) as u64,
+        storage_kind: row.get(8)?,
+        content_ref: row.get(9)?,
+        etag: row.get(10)?,
+        last_modified: row.get(11)?,
+        retrieved_at: row.get(12)?,
+        retrieval_status: row.get(13)?,
+    })
+}
+
+fn read_ingestion_candidate(row: &rusqlite::Row<'_>) -> rusqlite::Result<IngestionCandidateRead> {
+    Ok(IngestionCandidateRead {
+        candidate_id: row.get(0)?,
+        source_id: row.get(1)?,
+        adapter_id: row.get(2)?,
+        run_id: row.get(3)?,
+        candidate_kind: row.get(4)?,
+        target_entity_type: row.get(5)?,
+        target_entity_id: row.get(6)?,
+        stable_key: row.get(7)?,
+        proposed: json_value_from_row(row, 8)?,
+        evidence: json_array_from_row(row, 9)?,
+        provenance: json_array_from_row(row, 10)?,
+        comparison_state: row.get(11)?,
+        content_hash: row.get(12)?,
+        status: row.get(13)?,
+        seen_count: row.get::<_, i64>(14)?.max(0) as u32,
+        first_seen_at: row.get(15)?,
+        last_seen_at: row.get(16)?,
+    })
+}
+
+fn read_source_candidate(row: &rusqlite::Row<'_>) -> rusqlite::Result<SourceCandidateRead> {
+    Ok(SourceCandidateRead {
+        source_candidate_id: row.get(0)?,
+        source_key: row.get(1)?,
+        display_name: row.get(2)?,
+        base_url: row.get(3)?,
+        source_kind: row.get(4)?,
+        domains: json_vec_from_row(row, 5)?,
+        locale: json_map_from_row(row, 6)?,
+        capabilities: json_vec_from_row(row, 7)?,
+        evidence: json_array_from_row(row, 8)?,
+        provenance: json_array_from_row(row, 9)?,
+        discovered_by: row.get(10)?,
+        status: row.get(11)?,
+    })
+}
+
+fn read_adapter_candidate(row: &rusqlite::Row<'_>) -> rusqlite::Result<AdapterCandidateRead> {
+    Ok(AdapterCandidateRead {
+        adapter_candidate_id: row.get(0)?,
+        source_candidate_id: row.get(1)?,
+        adapter_id: row.get(2)?,
+        proposed: json_value_from_row(row, 3)?,
+        capabilities: json_vec_from_row(row, 4)?,
+        evidence: json_array_from_row(row, 5)?,
+        provenance: json_array_from_row(row, 6)?,
+        status: row.get(7)?,
+    })
+}
+
+fn read_integration_proposal(row: &rusqlite::Row<'_>) -> rusqlite::Result<IntegrationProposalRead> {
+    Ok(IntegrationProposalRead {
+        integration_proposal_id: row.get(0)?,
+        source_candidate_id: row.get(1)?,
+        adapter_candidate_id: row.get(2)?,
+        source_id: row.get(3)?,
+        adapter_id: row.get(4)?,
+        proposal: json_value_from_row(row, 5)?,
+        evidence: json_array_from_row(row, 6)?,
+        provenance: json_array_from_row(row, 7)?,
+        state: row.get(8)?,
+        reviewer: row.get(9)?,
+        decision_reason: row.get(10)?,
+        decided_at: row.get(11)?,
+        official_applied: row.get::<_, i64>(12)? != 0,
+    })
+}
+
+fn json_vec_from_row(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<Vec<String>> {
+    let value = json_value_from_row(row, index)?;
+    Ok(value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+fn json_map_from_row(
+    row: &rusqlite::Row<'_>,
+    index: usize,
+) -> rusqlite::Result<BTreeMap<String, String>> {
+    let text: String = row.get(index)?;
+    serde_json::from_str(&text).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            rusqlite::types::Type::Text,
+            Box::new(error),
+        )
+    })
+}
+
+fn json_array_from_row(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<Vec<Value>> {
+    let value = json_value_from_row(row, index)?;
+    Ok(value.as_array().cloned().unwrap_or_default())
+}
+
 #[cfg(test)]
 mod tests {
     use super::CatalogDb;
@@ -3442,7 +4594,8 @@ mod tests {
                 "0003_milano_vertical",
                 "0004_pack_runtime",
                 "0005_personal_favorite",
-                "0006_ai_curator"
+                "0006_ai_curator",
+                "0007_adapter_framework"
             ]
         );
         assert!(database.has_fts5().unwrap());

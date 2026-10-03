@@ -7,6 +7,8 @@ import {
   AI_CONTRACT_VERSION,
   AI_CAPABILITIES,
   AI_PROVIDERS,
+  ADAPTER_CAPABILITIES,
+  ADAPTER_CONTRACT_VERSION,
   READ_CONTRACT_VERSION,
   isEntityKind,
 } from "../dist/index.js";
@@ -25,7 +27,13 @@ test("baseline contract exposes the local core protocol", () => {
   ]);
   assert.equal(AI_CAPABILITIES.localOnly, "LOCAL_ONLY");
   assert.equal(READ_CONTRACT_VERSION, "1.0");
-  assert.deepEqual(BASELINE_MIGRATIONS, ["0001_core", "0002_fts5", "0003_milano_vertical", "0004_pack_runtime", "0005_personal_favorite", "0006_ai_curator"]);
+  assert.deepEqual(BASELINE_MIGRATIONS, ["0001_core", "0002_fts5", "0003_milano_vertical", "0004_pack_runtime", "0005_personal_favorite", "0006_ai_curator", "0007_adapter_framework"]);
+});
+
+test("adapter contract remains extensible and migration boundary is versioned", () => {
+  assert.equal(ADAPTER_CONTRACT_VERSION, "1.0");
+  assert.equal(ADAPTER_CAPABILITIES.discover, "DISCOVER");
+  assert.equal(ADAPTER_CAPABILITIES.healthCheck, "HEALTH_CHECK");
 });
 
 test("entity-kind validation rejects unknown or non-scalar values", () => {

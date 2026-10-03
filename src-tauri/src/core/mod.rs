@@ -1,3 +1,4 @@
+pub mod adapter;
 pub mod ai;
 pub mod commands;
 pub mod db;

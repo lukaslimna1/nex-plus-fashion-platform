@@ -7,6 +7,7 @@ export const BASELINE_MIGRATIONS = [
   "0004_pack_runtime",
   "0005_personal_favorite",
   "0006_ai_curator",
+  "0007_adapter_framework",
 ] as const;
 
 export const MILANO_SS27_PACK_ID = "nex.fashion.milano.ss27" as const;
@@ -60,7 +61,10 @@ export type IpcErrorCode =
   | "AI_ZERO_COST_NOT_GUARANTEED"
   | "AI_QUOTA_EXHAUSTED"
   | "AI_VALIDATION_FAILED"
-  | "AI_POLICY_ERROR";
+  | "AI_POLICY_ERROR"
+  | "ADAPTER_NOT_FOUND"
+  | "ADAPTER_CAPABILITY_UNSUPPORTED"
+  | "ADAPTER_ERROR";
 
 export interface IpcResponse<T> {
   ok: boolean;
@@ -209,6 +213,216 @@ export interface AiRunResult {
   execution: AiExecution;
   candidate: AiCandidate;
   proposal: CuratorProposal;
+}
+
+export const ADAPTER_CONTRACT_VERSION = "1.0" as const;
+
+export const ADAPTER_CAPABILITIES = {
+  discover: "DISCOVER",
+  fetchPage: "FETCH_PAGE",
+  fetchApi: "FETCH_API",
+  parseHtml: "PARSE_HTML",
+  extractStructuredData: "EXTRACT_STRUCTURED_DATA",
+  discoverImages: "DISCOVER_IMAGES",
+  discoverVideo: "DISCOVER_VIDEO",
+  discoverReviews: "DISCOVER_REVIEWS",
+  discoverBackstage: "DISCOVER_BACKSTAGE",
+  discoverDetails: "DISCOVER_DETAILS",
+  discoverEditorial: "DISCOVER_EDITORIAL",
+  discoverExtras: "DISCOVER_EXTRAS",
+  discoverRunway: "DISCOVER_RUNWAY",
+  discoverLooks: "DISCOVER_LOOKS",
+  discoverPerson: "DISCOVER_PERSON",
+  discoverCollection: "DISCOVER_COLLECTION",
+  discoverEvent: "DISCOVER_EVENT",
+  discoverEdition: "DISCOVER_EDITION",
+  fetchMediaMetadata: "FETCH_MEDIA_METADATA",
+  fetchReviewMetadata: "FETCH_REVIEW_METADATA",
+  paginate: "PAGINATE",
+  deltaSync: "DELTA_SYNC",
+  healthCheck: "HEALTH_CHECK",
+} as const;
+
+export type AdapterHealthState =
+  | "HEALTHY"
+  | "DEGRADED"
+  | "RATE_LIMITED"
+  | "AUTH_REQUIRED"
+  | "BLOCKED"
+  | "CHANGED"
+  | "UNAVAILABLE"
+  | "NOT_CONFIGURED";
+
+export interface AdapterPagination {
+  supported: boolean;
+  strategy: string;
+  cursorKind?: string;
+  checkpointKey?: string;
+}
+
+export interface AdapterRateLimit {
+  requestsPerMinute?: number;
+  burst?: number;
+  retryAfterHeader?: string;
+  notes?: string;
+}
+
+export interface AdapterRetryPolicy {
+  maxAttempts: number;
+  backoffMs: number[];
+  retryableStates: string[];
+}
+
+export interface AdapterSpec {
+  contractVersion: typeof ADAPTER_CONTRACT_VERSION;
+  adapterId: string;
+  version: string;
+  sourceIds: string[];
+  integrationIds: string[];
+  capabilities: string[];
+  discoveryStrategy: string;
+  supportedContentTypes: string[];
+  fetchStrategy: string;
+  parseStrategy: string;
+  normalizationStrategy: string;
+  pagination: AdapterPagination;
+  rateLimit: AdapterRateLimit;
+  retryPolicy: AdapterRetryPolicy;
+  provenanceSupport: boolean;
+  produces: string[];
+  fixtureSupport: boolean;
+  testSupport: boolean;
+}
+
+export interface AdapterHealth {
+  adapterId: string;
+  state: AdapterHealthState;
+  detail?: string;
+  checkedAt?: string;
+}
+
+export interface AdapterRegistryRead {
+  contractVersion: typeof ADAPTER_CONTRACT_VERSION;
+  adapters: AdapterSpec[];
+  health: AdapterHealth[];
+}
+
+export interface AdapterRunRequest {
+  adapterId: string;
+  sourceId?: string;
+  capability?: string;
+  cursor?: string;
+  checkpointKey?: string;
+  fixtureMode?: boolean;
+  maxItems?: number;
+}
+
+export interface AdapterRun {
+  runId: string;
+  adapterId: string;
+  sourceId?: string;
+  requestedCapability?: string;
+  status: "running" | "succeeded" | "degraded" | "failed";
+  cursor?: string;
+  checkpoint: Record<string, unknown>;
+  fixtureMode: boolean;
+  attempts: number;
+  artifactCount: number;
+  observationCount: number;
+  candidateCount: number;
+  changedCount: number;
+  errorCode?: string;
+  errorMessage?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export interface RawArtifact {
+  artifactId: string;
+  sourceId?: string;
+  adapterId: string;
+  integrationId?: string;
+  canonicalUrl: string;
+  contentType: string;
+  contentHash: string;
+  byteSize: number;
+  storageKind: "inline" | "external";
+  contentRef?: string;
+  etag?: string;
+  lastModified?: string;
+  retrievedAt: string;
+  retrievalStatus: string;
+}
+
+export interface SourceObservation {
+  observationId: string;
+  artifactId: string;
+  sourceId?: string;
+  adapterId: string;
+  entityType: string;
+  stableKey: string;
+  observed: unknown;
+  contentHash: string;
+  parserVersion: string;
+  observedAt: string;
+}
+
+export interface IngestionCandidate {
+  candidateId: string;
+  sourceId?: string;
+  adapterId: string;
+  runId: string;
+  candidateKind: string;
+  targetEntityType?: string;
+  targetEntityId?: string;
+  stableKey: string;
+  proposed: unknown;
+  evidence: unknown[];
+  provenance: unknown[];
+  comparisonState: "MATCHED" | "CHANGED" | "MISSING" | "UNKNOWN";
+  status: "open" | "converted" | "rejected" | "superseded";
+}
+
+export interface SourceCandidate {
+  sourceCandidateId: string;
+  sourceKey: string;
+  displayName: string;
+  baseUrl?: string;
+  sourceKind?: string;
+  domains: string[];
+  locale: Record<string, string>;
+  capabilities: string[];
+  evidence: unknown[];
+  provenance: unknown[];
+  discoveredBy: string;
+  status: "pending" | "approved" | "rejected";
+}
+
+export interface AdapterCandidate {
+  adapterCandidateId: string;
+  sourceCandidateId?: string;
+  adapterId?: string;
+  proposed: unknown;
+  capabilities: string[];
+  evidence: unknown[];
+  provenance: unknown[];
+  status: "pending" | "approved" | "rejected";
+}
+
+export interface IntegrationProposal {
+  integrationProposalId: string;
+  sourceCandidateId?: string;
+  adapterCandidateId?: string;
+  sourceId?: string;
+  adapterId?: string;
+  proposal: unknown;
+  evidence: unknown[];
+  provenance: unknown[];
+  state: "pending" | "approved" | "rejected";
+  reviewer?: string;
+  decisionReason?: string;
+  decidedAt?: string;
+  officialApplied: boolean;
 }
 
 export const AI_CAPABILITIES = {

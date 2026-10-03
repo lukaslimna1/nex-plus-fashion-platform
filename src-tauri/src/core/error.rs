@@ -40,6 +40,15 @@ pub enum CoreError {
     AiZeroCostNotGuaranteed(String),
     #[error("AI provider quota is exhausted: {0}")]
     AiQuotaExhausted(String),
+    #[error("adapter not found: {0}")]
+    AdapterNotFound(String),
+    #[error("adapter capability is unsupported: {adapter_id} / {capability}")]
+    AdapterCapabilityUnsupported {
+        adapter_id: String,
+        capability: String,
+    },
+    #[error("adapter error: {0}")]
+    Adapter(String),
     #[error("core state lock is poisoned")]
     StatePoisoned,
 }
@@ -72,6 +81,9 @@ impl CoreError {
             Self::AiZeroCostPolicy(_) => "AI_ZERO_COST_POLICY",
             Self::AiZeroCostNotGuaranteed(_) => "AI_ZERO_COST_NOT_GUARANTEED",
             Self::AiQuotaExhausted(_) => "AI_QUOTA_EXHAUSTED",
+            Self::AdapterNotFound(_) => "ADAPTER_NOT_FOUND",
+            Self::AdapterCapabilityUnsupported { .. } => "ADAPTER_CAPABILITY_UNSUPPORTED",
+            Self::Adapter(_) => "ADAPTER_ERROR",
             Self::Pack(_) => "PACK_ERROR",
             Self::Database(_)
             | Self::Io(_)

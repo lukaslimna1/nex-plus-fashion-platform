@@ -1,3 +1,6 @@
+use crate::core::adapter::{
+    AdapterCandidateRequest, AdapterRunRequest, IntegrationProposalRequest, SourceCandidateRequest,
+};
 use crate::core::ai::{
     AiExecutionRead, AiHealthReport, AiRunResult, AiTaskRequest, CuratorProposalDecisionRequest,
     CuratorProposalRead,
@@ -100,6 +103,141 @@ pub fn curator_proposal_decide(
         .lock()
         .map_err(|_| CoreError::StatePoisoned)?;
     database.decide_curator_proposal(&request)
+}
+
+#[tauri::command]
+pub fn curator_adapters(state: State<'_, CoreState>) -> crate::core::adapter::AdapterRegistryRead {
+    state.adapters.read()
+}
+
+#[tauri::command]
+pub fn curator_adapter_runs(
+    state: State<'_, CoreState>,
+    limit: Option<u32>,
+) -> Result<Vec<crate::core::db::AdapterRunRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.adapter_runs(limit.unwrap_or(50))
+}
+
+#[tauri::command]
+pub fn curator_raw_artifacts(
+    state: State<'_, CoreState>,
+    adapter_id: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<crate::core::db::RawArtifactRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.raw_artifacts(adapter_id.as_deref(), limit.unwrap_or(50))
+}
+
+#[tauri::command]
+pub fn curator_ingestion_candidates(
+    state: State<'_, CoreState>,
+    adapter_id: Option<String>,
+    status: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<crate::core::db::IngestionCandidateRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.ingestion_candidates(
+        adapter_id.as_deref(),
+        status.as_deref(),
+        limit.unwrap_or(50),
+    )
+}
+
+#[tauri::command]
+pub fn curator_adapter_run(
+    state: State<'_, CoreState>,
+    request: AdapterRunRequest,
+) -> Result<crate::core::db::AdapterRunRead, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    state.adapters.run(&mut database, request)
+}
+
+#[tauri::command]
+pub fn curator_source_candidates(
+    state: State<'_, CoreState>,
+    status: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<crate::core::db::SourceCandidateRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.source_candidates(status.as_deref(), limit.unwrap_or(50))
+}
+
+#[tauri::command]
+pub fn curator_source_candidate_create(
+    state: State<'_, CoreState>,
+    request: SourceCandidateRequest,
+) -> Result<crate::core::db::SourceCandidateRead, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    crate::core::adapter::create_source_candidate(&mut database, request)
+}
+
+#[tauri::command]
+pub fn curator_adapter_candidates(
+    state: State<'_, CoreState>,
+    status: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<crate::core::db::AdapterCandidateRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.adapter_candidates(status.as_deref(), limit.unwrap_or(50))
+}
+
+#[tauri::command]
+pub fn curator_adapter_candidate_create(
+    state: State<'_, CoreState>,
+    request: AdapterCandidateRequest,
+) -> Result<crate::core::db::AdapterCandidateRead, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    crate::core::adapter::create_adapter_candidate(&mut database, request)
+}
+
+#[tauri::command]
+pub fn curator_integration_proposals(
+    state: State<'_, CoreState>,
+    proposal_state: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<crate::core::db::IntegrationProposalRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.integration_proposals(proposal_state.as_deref(), limit.unwrap_or(50))
+}
+
+#[tauri::command]
+pub fn curator_integration_proposal_create(
+    state: State<'_, CoreState>,
+    request: IntegrationProposalRequest,
+) -> Result<crate::core::db::IntegrationProposalRead, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    crate::core::adapter::create_integration_proposal(&mut database, request)
 }
 
 #[tauri::command]
