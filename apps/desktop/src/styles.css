@@ -1,0 +1,30 @@
+:root {
+  color: #f3f0ea;
+  background: #111111;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; min-width: 320px; }
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 3rem;
+}
+
+.eyebrow { color: #b4a895; font-size: .75rem; letter-spacing: .16em; margin: 0; }
+h1 { font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: .95; margin: 0; max-width: 8ch; }
+.lede { color: #c8c2ba; font-size: 1.15rem; max-width: 34rem; }
+.status-card { display: flex; align-items: center; gap: .7rem; border: 1px solid #3b3935; border-radius: .75rem; padding: 1rem; max-width: 34rem; }
+.status-dot { width: .65rem; height: .65rem; border-radius: 999px; background: #b4a895; }
+.status-ready { background: #76d39b; }
+.status-error { background: #e47b72; }
+.boundary { color: #8e8981; font-size: .85rem; max-width: 34rem; }
