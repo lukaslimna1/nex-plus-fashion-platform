@@ -1,7 +1,0 @@
-{
-  "name": "@nex-plus/media",
-  "private": true,
-  "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@nex-plus/types": "file:../types" }
-}
