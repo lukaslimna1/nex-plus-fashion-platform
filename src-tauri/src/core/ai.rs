@@ -4,10 +4,16 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 pub const AI_CONTRACT_VERSION: &str = "1.0";
+pub const ALLOWED_COST: &str = "ZERO";
+pub const PROVIDER_GEMINI: &str = "gemini";
+pub const PROVIDER_GROQ: &str = "groq";
+pub const PROVIDER_CLOUDFLARE_WORKERS_AI: &str = "cloudflare_workers_ai";
+pub const PROVIDER_LOCAL: &str = "local";
 pub const CAPABILITY_STRUCTURED_EXTRACTION: &str = "STRUCTURED_EXTRACTION";
 pub const CAPABILITY_SUMMARIZATION: &str = "SUMMARIZATION";
 pub const CAPABILITY_TRANSLATION_PT_BR: &str = "TRANSLATION_PT_BR";
@@ -33,6 +39,8 @@ pub struct AiProviderHealth {
     pub provider_id: String,
     pub model: String,
     pub state: AiProviderState,
+    pub zero_cost_eligible: bool,
+    pub zero_cost_capabilities: Vec<String>,
     pub capabilities: Vec<String>,
     pub detail: Option<String>,
 }
@@ -41,6 +49,7 @@ pub struct AiProviderHealth {
 #[serde(rename_all = "camelCase")]
 pub struct AiHealthReport {
     pub contract_version: &'static str,
+    pub allowed_cost: &'static str,
     pub router_state: AiProviderState,
     pub providers: Vec<AiProviderHealth>,
     pub capabilities: Vec<String>,
@@ -226,6 +235,7 @@ struct ProviderResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProviderErrorKind {
     NotConfigured,
+    PolicyDenied,
     RateLimited,
     Timeout,
     Unavailable,
@@ -250,6 +260,7 @@ impl ProviderError {
     fn code(self) -> &'static str {
         match self.kind {
             ProviderErrorKind::NotConfigured => "AI_NOT_CONFIGURED",
+            ProviderErrorKind::PolicyDenied => "AI_ZERO_COST_POLICY",
             ProviderErrorKind::RateLimited => "AI_RATE_LIMITED",
             ProviderErrorKind::Timeout => "AI_TIMEOUT",
             ProviderErrorKind::Unavailable => "AI_PROVIDER_UNAVAILABLE",
@@ -264,22 +275,39 @@ trait AiProvider: Send + Sync {
     fn complete(&self, request: &ProviderRequest) -> Result<ProviderResponse, ProviderError>;
 }
 
-struct OpenAiCompatibleProvider {
+#[derive(Debug, Clone)]
+struct ZeroCostPolicy {
+    model_eligible: bool,
+    capabilities: Vec<String>,
+}
+
+impl ZeroCostPolicy {
+    fn local(capabilities: Vec<String>) -> Self {
+        Self {
+            model_eligible: true,
+            capabilities,
+        }
+    }
+}
+
+struct JsonHttpProvider {
     provider_id: String,
     model: String,
     endpoint: String,
     api_key: Option<String>,
     configured: bool,
+    policy: ZeroCostPolicy,
     capabilities: Vec<String>,
     client: Client,
 }
 
-impl OpenAiCompatibleProvider {
+impl JsonHttpProvider {
     fn new(
         provider_id: &str,
         model: String,
         endpoint: &str,
         api_key: Option<String>,
+        policy: ZeroCostPolicy,
         capabilities: Vec<String>,
         client: Client,
     ) -> Self {
@@ -290,6 +318,7 @@ impl OpenAiCompatibleProvider {
             endpoint,
             api_key,
             configured,
+            policy,
             capabilities,
             client,
         )
@@ -301,6 +330,7 @@ impl OpenAiCompatibleProvider {
         endpoint: &str,
         api_key: Option<String>,
         configured: bool,
+        policy: ZeroCostPolicy,
         capabilities: Vec<String>,
         client: Client,
     ) -> Self {
@@ -310,27 +340,37 @@ impl OpenAiCompatibleProvider {
             endpoint: endpoint.to_string(),
             api_key,
             configured,
+            policy,
             capabilities,
             client,
         }
     }
 }
 
-impl AiProvider for OpenAiCompatibleProvider {
+impl AiProvider for JsonHttpProvider {
     fn health(&self) -> AiProviderHealth {
         AiProviderHealth {
             provider_id: self.provider_id.clone(),
             model: self.model.clone(),
-            state: if self.configured {
-                AiProviderState::Available
-            } else {
+            state: if !self.configured {
                 AiProviderState::NotConfigured
-            },
-            capabilities: self.capabilities.clone(),
-            detail: if self.configured {
-                Some("configured; runtime health is confirmed per execution".to_string())
+            } else if !self.policy.model_eligible || self.policy.capabilities.is_empty() {
+                AiProviderState::Unavailable
             } else {
-                Some("API key is not configured".to_string())
+                AiProviderState::Available
+            },
+            zero_cost_eligible: self.policy.model_eligible,
+            zero_cost_capabilities: self.policy.capabilities.clone(),
+            capabilities: self.capabilities.clone(),
+            detail: if !self.configured {
+                Some("credentials or endpoint are not configured".to_string())
+            } else if !self.policy.model_eligible || self.policy.capabilities.is_empty() {
+                Some(
+                    "model or capability is not explicitly eligible for the ZERO cost policy"
+                        .to_string(),
+                )
+            } else {
+                Some("configured; runtime health is confirmed per execution".to_string())
             },
         }
     }
@@ -403,6 +443,7 @@ impl AiProvider for OpenAiCompatibleProvider {
 struct GeminiProvider {
     model: String,
     api_key: Option<String>,
+    policy: ZeroCostPolicy,
     capabilities: Vec<String>,
     client: Client,
 }
@@ -411,12 +452,14 @@ impl GeminiProvider {
     fn new(
         model: String,
         api_key: Option<String>,
+        policy: ZeroCostPolicy,
         capabilities: Vec<String>,
         client: Client,
     ) -> Self {
         Self {
             model,
             api_key,
+            policy,
             capabilities,
             client,
         }
@@ -428,16 +471,25 @@ impl AiProvider for GeminiProvider {
         AiProviderHealth {
             provider_id: "gemini".to_string(),
             model: self.model.clone(),
-            state: if self.api_key.is_some() {
-                AiProviderState::Available
-            } else {
+            state: if self.api_key.is_none() {
                 AiProviderState::NotConfigured
-            },
-            capabilities: self.capabilities.clone(),
-            detail: if self.api_key.is_some() {
-                Some("configured; runtime health is confirmed per execution".to_string())
+            } else if !self.policy.model_eligible || self.policy.capabilities.is_empty() {
+                AiProviderState::Unavailable
             } else {
+                AiProviderState::Available
+            },
+            zero_cost_eligible: self.policy.model_eligible,
+            zero_cost_capabilities: self.policy.capabilities.clone(),
+            capabilities: self.capabilities.clone(),
+            detail: if self.api_key.is_none() {
                 Some("API key is not configured".to_string())
+            } else if !self.policy.model_eligible || self.policy.capabilities.is_empty() {
+                Some(
+                    "model or capability is not explicitly eligible for the ZERO cost policy"
+                        .to_string(),
+                )
+            } else {
+                Some("configured; runtime health is confirmed per execution".to_string())
             },
         }
     }
@@ -501,6 +553,142 @@ impl AiProvider for GeminiProvider {
     }
 }
 
+struct CloudflareWorkersAiProvider {
+    account_id: Option<String>,
+    api_token: Option<String>,
+    model: String,
+    policy: ZeroCostPolicy,
+    capabilities: Vec<String>,
+    client: Client,
+}
+
+impl CloudflareWorkersAiProvider {
+    fn new(
+        account_id: Option<String>,
+        api_token: Option<String>,
+        model: String,
+        policy: ZeroCostPolicy,
+        capabilities: Vec<String>,
+        client: Client,
+    ) -> Self {
+        Self {
+            account_id,
+            api_token,
+            model,
+            policy,
+            capabilities,
+            client,
+        }
+    }
+
+    fn configured(&self) -> bool {
+        self.account_id.is_some() && self.api_token.is_some()
+    }
+}
+
+impl AiProvider for CloudflareWorkersAiProvider {
+    fn health(&self) -> AiProviderHealth {
+        let configured = self.configured();
+        AiProviderHealth {
+            provider_id: PROVIDER_CLOUDFLARE_WORKERS_AI.to_string(),
+            model: self.model.clone(),
+            state: if !configured {
+                AiProviderState::NotConfigured
+            } else if !self.policy.model_eligible || self.policy.capabilities.is_empty() {
+                AiProviderState::Unavailable
+            } else {
+                AiProviderState::Available
+            },
+            zero_cost_eligible: self.policy.model_eligible,
+            zero_cost_capabilities: self.policy.capabilities.clone(),
+            capabilities: self.capabilities.clone(),
+            detail: if !configured {
+                Some("account ID or API token is not configured".to_string())
+            } else if !self.policy.model_eligible {
+                Some(
+                    "model or capability is not explicitly eligible for the ZERO cost policy"
+                        .to_string(),
+                )
+            } else {
+                Some("Workers Free eligibility is explicit; paid models are denied".to_string())
+            },
+        }
+    }
+
+    fn complete(&self, request: &ProviderRequest) -> Result<ProviderResponse, ProviderError> {
+        if !self.configured() {
+            return Err(ProviderError::new(
+                ProviderErrorKind::NotConfigured,
+                "Cloudflare Workers AI is not configured",
+            ));
+        }
+        if !self.policy.model_eligible {
+            return Err(ProviderError::new(
+                ProviderErrorKind::PolicyDenied,
+                "Cloudflare model is not eligible for the ZERO cost policy",
+            ));
+        }
+        let endpoint = format!(
+            "https://api.cloudflare.com/client/v4/accounts/{}/ai/run/{}",
+            self.account_id.as_deref().unwrap_or_default(),
+            self.model
+        );
+        let response = self
+            .client
+            .post(endpoint)
+            .bearer_auth(self.api_token.as_deref().unwrap_or_default())
+            .json(&json!({
+                "prompt": format!(
+                    "Return only JSON matching this schema: {}\\n\\nEvidence/task:\\n{}",
+                    request.output_schema, request.input_text
+                )
+            }))
+            .timeout(Duration::from_millis(request.timeout_ms))
+            .send()
+            .map_err(classify_reqwest_error)?;
+        let status = response.status();
+        let body: Value = response.json().map_err(|error| {
+            ProviderError::new(
+                ProviderErrorKind::InvalidResponse,
+                format!("Cloudflare response was not JSON: {error}"),
+            )
+        })?;
+        if status.as_u16() == 403 && body.to_string().contains("5035") {
+            return Err(ProviderError::new(
+                ProviderErrorKind::PolicyDenied,
+                "Cloudflare model requires Workers Paid and was rejected",
+            ));
+        }
+        if !status.is_success() {
+            return Err(classify_http_status(status.as_u16()));
+        }
+        let response_value = body
+            .pointer("/result/response")
+            .cloned()
+            .or_else(|| body.get("result").cloned())
+            .ok_or_else(|| {
+                ProviderError::new(
+                    ProviderErrorKind::InvalidResponse,
+                    "Cloudflare response did not contain result.response",
+                )
+            })?;
+        let output = match response_value {
+            Value::String(content) => serde_json::from_str(&content).map_err(|error| {
+                ProviderError::new(
+                    ProviderErrorKind::InvalidResponse,
+                    format!("Cloudflare response was not structured JSON: {error}"),
+                )
+            })?,
+            other => other,
+        };
+        Ok(ProviderResponse {
+            output,
+            usage: body.get("usage").cloned(),
+            cost: Some(0.0),
+        })
+    }
+}
+
 fn classify_reqwest_error(error: reqwest::Error) -> ProviderError {
     if error.is_timeout() {
         ProviderError::new(ProviderErrorKind::Timeout, "provider request timed out")
@@ -510,6 +698,69 @@ fn classify_reqwest_error(error: reqwest::Error) -> ProviderError {
             "provider request was unavailable",
         )
     }
+}
+
+fn env_value(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn csv_env(name: &str) -> Vec<String> {
+    env_value(name)
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn zero_cost_policy(prefix: &str, model: &str) -> ZeroCostPolicy {
+    let allowed_cost_name = format!("{prefix}_ALLOWED_COST");
+    let models_name = format!("{prefix}_ZERO_COST_MODELS");
+    let capabilities_name = format!("{prefix}_ZERO_COST_CAPABILITIES");
+    let allowed_cost = env_value(&allowed_cost_name).unwrap_or_default();
+    let models = csv_env(&models_name);
+    let capabilities = csv_env(&capabilities_name);
+    zero_cost_policy_from_values(&allowed_cost, model, &models, capabilities)
+}
+
+fn zero_cost_policy_from_values(
+    allowed_cost: &str,
+    model: &str,
+    models: &[String],
+    capabilities: Vec<String>,
+) -> ZeroCostPolicy {
+    ZeroCostPolicy {
+        model_eligible: allowed_cost.eq_ignore_ascii_case(ALLOWED_COST)
+            && models
+                .iter()
+                .any(|allowed_model| allowed_model == "*" || allowed_model == model),
+        capabilities,
+    }
+}
+
+fn cloudflare_model_requires_paid(model: &str) -> bool {
+    matches!(
+        model,
+        "@cf/moonshotai/kimi-k2.6"
+            | "@cf/moonshotai/kimi-k2.7-code"
+            | "@cf/zai-org/glm-5.2"
+            | "@cf/zai-org/glm-5.3"
+            | "@cf/zai-org/glm-5.3-flash"
+            | "@cf/deepseek-ai/deepseek-v4-flash-0731"
+            | "@cf/deepseek-ai/deepseek-v4-pro-0813"
+    )
+}
+
+fn cloudflare_zero_cost_policy(model: &str) -> ZeroCostPolicy {
+    let mut policy = zero_cost_policy("NEX_AI_CLOUDFLARE_WORKERS_AI", model);
+    if cloudflare_model_requires_paid(model) {
+        policy.model_eligible = false;
+    }
+    policy
 }
 
 fn classify_http_status(status: u16) -> ProviderError {
@@ -535,6 +786,7 @@ fn classify_http_status(status: u16) -> ProviderError {
 
 pub struct AiRouter {
     providers: Vec<Box<dyn AiProvider>>,
+    runtime_state: Mutex<HashMap<String, AiProviderState>>,
 }
 
 impl AiRouter {
@@ -559,82 +811,99 @@ impl AiRouter {
         let mut gemini_capabilities = text_capabilities.clone();
         gemini_capabilities.extend(vision_capabilities.clone());
         let mut providers: Vec<Box<dyn AiProvider>> = Vec::new();
+        let gemini_model = env_or("NEX_AI_GEMINI_MODEL", "gemini-2.5-flash");
         providers.push(Box::new(GeminiProvider::new(
-            env_or("NEX_AI_GEMINI_MODEL", "gemini-2.5-flash"),
-            std::env::var("NEX_AI_GEMINI_API_KEY")
-                .ok()
-                .filter(|v| !v.is_empty()),
+            gemini_model.clone(),
+            env_value("NEX_AI_GEMINI_API_KEY"),
+            zero_cost_policy("NEX_AI_GEMINI", &gemini_model),
             gemini_capabilities,
             client.clone(),
         )));
-        providers.push(Box::new(OpenAiCompatibleProvider::new(
-            "xai",
-            env_or("NEX_AI_XAI_MODEL", "grok-4.7"),
-            "https://api.x.ai/v1/chat/completions",
-            std::env::var("NEX_AI_XAI_API_KEY")
-                .ok()
-                .filter(|v| !v.is_empty()),
-            text_capabilities.clone(),
-            client.clone(),
-        )));
-        providers.push(Box::new(OpenAiCompatibleProvider::new(
-            "groq",
-            env_or("NEX_AI_GROQ_MODEL", "openai/gpt-oss-20b"),
+
+        let groq_model = env_or("NEX_AI_GROQ_MODEL", "llama-3.1-8b-instant");
+        providers.push(Box::new(JsonHttpProvider::new(
+            PROVIDER_GROQ,
+            groq_model.clone(),
             "https://api.groq.com/openai/v1/chat/completions",
-            std::env::var("NEX_AI_GROQ_API_KEY")
-                .ok()
-                .filter(|v| !v.is_empty()),
+            env_value("NEX_AI_GROQ_API_KEY"),
+            zero_cost_policy("NEX_AI_GROQ", &groq_model),
             text_capabilities.clone(),
             client.clone(),
         )));
-        providers.push(Box::new(OpenAiCompatibleProvider::new(
-            "openrouter",
-            env_or("NEX_AI_OPENROUTER_MODEL", "openai/gpt-oss-20b"),
-            "https://openrouter.ai/api/v1/chat/completions",
-            std::env::var("NEX_AI_OPENROUTER_API_KEY")
-                .ok()
-                .filter(|v| !v.is_empty()),
+
+        let cloudflare_model = env_or("NEX_AI_CLOUDFLARE_WORKERS_AI_MODEL", "unset");
+        providers.push(Box::new(CloudflareWorkersAiProvider::new(
+            env_value("NEX_AI_CLOUDFLARE_WORKERS_AI_ACCOUNT_ID"),
+            env_value("NEX_AI_CLOUDFLARE_WORKERS_AI_API_TOKEN"),
+            cloudflare_model.clone(),
+            cloudflare_zero_cost_policy(&cloudflare_model),
             text_capabilities.clone(),
             client.clone(),
         )));
-        let local_endpoint = std::env::var("NEX_AI_LOCAL_ENDPOINT")
-            .ok()
-            .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| "http://127.0.0.1:11434/v1/chat/completions".to_string());
-        let local_configured = std::env::var("NEX_AI_LOCAL_ENDPOINT")
-            .ok()
-            .filter(|value| !value.is_empty())
-            .is_some();
-        providers.push(Box::new(OpenAiCompatibleProvider::with_configured(
-            "local",
-            env_or("NEX_AI_LOCAL_MODEL", "local"),
+
+        let local_endpoint = env_or(
+            "NEX_AI_LOCAL_ENDPOINT",
+            "http://127.0.0.1:8080/v1/chat/completions",
+        );
+        let local_configured = env_value("NEX_AI_LOCAL_ENDPOINT").is_some();
+        let mut local_capabilities = text_capabilities;
+        local_capabilities.push(CAPABILITY_LOCAL_ONLY.to_string());
+        providers.push(Box::new(JsonHttpProvider::with_configured(
+            PROVIDER_LOCAL,
+            env_or("NEX_AI_LOCAL_MODEL", "llama.cpp"),
             &local_endpoint,
-            std::env::var("NEX_AI_LOCAL_API_KEY")
-                .ok()
-                .filter(|v| !v.is_empty()),
+            env_value("NEX_AI_LOCAL_API_KEY"),
             local_configured,
-            text_capabilities,
+            ZeroCostPolicy::local(local_capabilities.clone()),
+            local_capabilities,
             client,
         )));
-        Self { providers }
+        Self {
+            providers,
+            runtime_state: Mutex::new(HashMap::new()),
+        }
     }
 
     #[cfg(test)]
     fn with_providers(providers: Vec<Box<dyn AiProvider>>) -> Self {
-        Self { providers }
+        Self {
+            providers,
+            runtime_state: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn effective_health(&self, provider: &dyn AiProvider) -> AiProviderHealth {
+        let mut health = provider.health();
+        if let Some(state) = self
+            .runtime_state
+            .lock()
+            .ok()
+            .and_then(|states| states.get(&health.provider_id).copied())
+        {
+            health.state = state;
+            health.detail = Some(format!("runtime state: {state:?}"));
+        }
+        health
+    }
+
+    fn set_runtime_state(&self, provider_id: &str, state: AiProviderState) {
+        if let Ok(mut states) = self.runtime_state.lock() {
+            states.insert(provider_id.to_string(), state);
+        }
     }
 
     pub fn health(&self) -> AiHealthReport {
         let providers = self
             .providers
             .iter()
-            .map(|provider| provider.health())
+            .map(|provider| self.effective_health(provider.as_ref()))
             .collect::<Vec<_>>();
         let configured = providers.iter().any(|provider| {
             matches!(
                 provider.state,
                 AiProviderState::Available | AiProviderState::Degraded
-            )
+            ) && provider.zero_cost_eligible
+                && !provider.zero_cost_capabilities.is_empty()
         });
         let capabilities = vec![
             CAPABILITY_STRUCTURED_EXTRACTION,
@@ -651,6 +920,7 @@ impl AiRouter {
         .collect();
         AiHealthReport {
             contract_version: AI_CONTRACT_VERSION,
+            allowed_cost: ALLOWED_COST,
             router_state: if configured {
                 AiProviderState::Available
             } else {
@@ -680,6 +950,7 @@ impl AiRouter {
         let mut attempted = 0usize;
         let mut fallback_step = 0u8;
         let mut last_error = None;
+        let mut last_error_code = None;
         let mut configured_seen = false;
         let mut seen = HashSet::new();
 
@@ -694,7 +965,7 @@ impl AiRouter {
             else {
                 continue;
             };
-            let health = provider.health();
+            let health = self.effective_health(provider.as_ref());
             if !matches!(
                 health.state,
                 AiProviderState::Available | AiProviderState::Degraded
@@ -715,79 +986,21 @@ impl AiRouter {
             });
             let latency_ms = started.elapsed().as_millis() as i64;
             match result {
-                Ok(response) => match validate_output(&request, &response.output) {
-                    Ok(validation_result) => {
-                        let execution_id = new_id("ai-execution");
-                        let candidate_id = new_id("ai-candidate");
-                        let proposal_id = new_id("proposal");
-                        let completed_at = database.current_timestamp()?;
-                        let execution = AiExecutionRecord {
-                            execution_id: execution_id.clone(),
-                            task_type: request.task_type.clone(),
-                            provider_id: provider_id.clone(),
-                            model: health.model,
-                            capability: request.capability.clone(),
-                            started_at,
-                            completed_at: Some(completed_at),
-                            latency_ms: Some(latency_ms),
-                            attempt,
-                            fallback_step,
-                            status: "succeeded".to_string(),
-                            validator_schema: request.task_type.clone(),
-                            validation_result,
-                            error_code: None,
-                            error_message: None,
-                            input_hash: input_hash.clone(),
-                            usage: response.usage,
-                            cost: response.cost,
-                            candidate_id: Some(candidate_id.clone()),
-                        };
-                        let evidence = request
-                            .evidence_urls
-                            .iter()
-                            .map(|url| json!({ "url": url }))
-                            .collect::<Vec<_>>();
-                        let provenance = request
-                            .source_ids
-                            .iter()
-                            .map(|source_id| json!({ "sourceId": source_id }))
-                            .collect::<Vec<_>>();
-                        let candidate = AiCandidateRecord {
-                            candidate_id: candidate_id.clone(),
-                            proposal_kind: request.task_type.clone(),
-                            target: request.target.clone(),
-                            proposed: response.output.clone(),
-                            evidence: evidence.clone(),
-                            provenance: provenance.clone(),
-                            rationale: response
-                                .output
-                                .get("rationale")
-                                .and_then(Value::as_str)
-                                .map(str::to_string),
-                            confidence: response.output.get("confidence").and_then(Value::as_f64),
-                            execution_id,
-                        };
-                        let proposal = CuratorProposalRecord {
-                            proposal_id,
-                            candidate_id,
-                            proposal_kind: request.task_type.clone(),
-                            target: request.target.clone(),
-                            proposed: response.output,
-                            evidence,
-                            provenance,
-                            rationale: candidate.rationale.clone(),
-                            confidence: candidate.confidence,
-                        };
-                        return database.persist_ai_success(&execution, &candidate, &proposal);
-                    }
-                    Err(error) => {
-                        let message = error.to_string();
-                        last_error = Some(message.clone());
+                Ok(response) => {
+                    if response.cost.is_some_and(|cost| cost != 0.0) {
+                        let error = ProviderError::new(
+                            ProviderErrorKind::PolicyDenied,
+                            "non-zero provider cost was rejected by the ZERO cost policy",
+                        );
+                        let error_code = error.clone().code().to_string();
+                        let error_message = error.message.clone();
+                        last_error = Some(error.message.clone());
+                        last_error_code = Some(error.code());
                         database.persist_ai_failure(&AiExecutionRecord {
                             execution_id: new_id("ai-execution"),
                             task_type: request.task_type.clone(),
                             provider_id: provider_id.clone(),
-                            model: health.model,
+                            model: health.model.clone(),
                             capability: request.capability.clone(),
                             started_at: started_at.clone(),
                             completed_at: Some(database.current_timestamp()?),
@@ -796,19 +1009,119 @@ impl AiRouter {
                             fallback_step,
                             status: "failed".to_string(),
                             validator_schema: request.task_type.clone(),
-                            validation_result: json!({ "valid": false, "message": message }),
-                            error_code: Some("AI_VALIDATION_FAILED".to_string()),
-                            error_message: Some(message),
+                            validation_result: json!({ "valid": false }),
+                            error_code: Some(error_code),
+                            error_message: Some(error_message),
                             input_hash: input_hash.clone(),
                             usage: response.usage,
-                            cost: response.cost,
+                            cost: None,
                             candidate_id: None,
                         })?;
+                        self.set_runtime_state(&provider_id, AiProviderState::Unavailable);
+                        continue;
                     }
-                },
+                    match validate_output(&request, &response.output) {
+                        Ok(validation_result) => {
+                            let execution_id = new_id("ai-execution");
+                            let candidate_id = new_id("ai-candidate");
+                            let proposal_id = new_id("proposal");
+                            let completed_at = database.current_timestamp()?;
+                            let execution = AiExecutionRecord {
+                                execution_id: execution_id.clone(),
+                                task_type: request.task_type.clone(),
+                                provider_id: provider_id.clone(),
+                                model: health.model,
+                                capability: request.capability.clone(),
+                                started_at,
+                                completed_at: Some(completed_at),
+                                latency_ms: Some(latency_ms),
+                                attempt,
+                                fallback_step,
+                                status: "succeeded".to_string(),
+                                validator_schema: request.task_type.clone(),
+                                validation_result,
+                                error_code: None,
+                                error_message: None,
+                                input_hash: input_hash.clone(),
+                                usage: response.usage,
+                                cost: Some(0.0),
+                                candidate_id: Some(candidate_id.clone()),
+                            };
+                            let evidence = request
+                                .evidence_urls
+                                .iter()
+                                .map(|url| json!({ "url": url }))
+                                .collect::<Vec<_>>();
+                            let provenance = request
+                                .source_ids
+                                .iter()
+                                .map(|source_id| json!({ "sourceId": source_id }))
+                                .collect::<Vec<_>>();
+                            let candidate = AiCandidateRecord {
+                                candidate_id: candidate_id.clone(),
+                                proposal_kind: request.task_type.clone(),
+                                target: request.target.clone(),
+                                proposed: response.output.clone(),
+                                evidence: evidence.clone(),
+                                provenance: provenance.clone(),
+                                rationale: response
+                                    .output
+                                    .get("rationale")
+                                    .and_then(Value::as_str)
+                                    .map(str::to_string),
+                                confidence: response
+                                    .output
+                                    .get("confidence")
+                                    .and_then(Value::as_f64),
+                                execution_id,
+                            };
+                            let proposal = CuratorProposalRecord {
+                                proposal_id,
+                                candidate_id,
+                                proposal_kind: request.task_type.clone(),
+                                target: request.target.clone(),
+                                proposed: response.output,
+                                evidence,
+                                provenance,
+                                rationale: candidate.rationale.clone(),
+                                confidence: candidate.confidence,
+                            };
+                            return database.persist_ai_success(&execution, &candidate, &proposal);
+                        }
+                        Err(error) => {
+                            let message = error.to_string();
+                            last_error = Some(message.clone());
+                            last_error_code = Some("AI_VALIDATION_FAILED");
+                            database.persist_ai_failure(&AiExecutionRecord {
+                                execution_id: new_id("ai-execution"),
+                                task_type: request.task_type.clone(),
+                                provider_id: provider_id.clone(),
+                                model: health.model,
+                                capability: request.capability.clone(),
+                                started_at: started_at.clone(),
+                                completed_at: Some(database.current_timestamp()?),
+                                latency_ms: Some(latency_ms),
+                                attempt,
+                                fallback_step,
+                                status: "failed".to_string(),
+                                validator_schema: request.task_type.clone(),
+                                validation_result: json!({ "valid": false, "message": message }),
+                                error_code: Some("AI_VALIDATION_FAILED".to_string()),
+                                error_message: Some(message),
+                                input_hash: input_hash.clone(),
+                                usage: response.usage,
+                                cost: response.cost,
+                                candidate_id: None,
+                            })?;
+                            self.set_runtime_state(&provider_id, AiProviderState::Degraded);
+                        }
+                    }
+                }
                 Err(error) => {
-                    let code = error.clone().code().to_string();
+                    let error_code = error.clone().code();
+                    let code = error_code.to_string();
                     last_error = Some(error.message.clone());
+                    last_error_code = Some(error_code);
                     database.persist_ai_failure(&AiExecutionRecord {
                         execution_id: new_id("ai-execution"),
                         task_type: request.task_type.clone(),
@@ -830,6 +1143,14 @@ impl AiRouter {
                         cost: None,
                         candidate_id: None,
                     })?;
+                    let runtime_state = match error_code {
+                        "AI_RATE_LIMITED" => AiProviderState::RateLimited,
+                        "AI_TIMEOUT" | "AI_PROVIDER_UNAVAILABLE" | "AI_ZERO_COST_POLICY" => {
+                            AiProviderState::Unavailable
+                        }
+                        _ => AiProviderState::Degraded,
+                    };
+                    self.set_runtime_state(&provider_id, runtime_state);
                 }
             }
             fallback_step = fallback_step.saturating_add(1);
@@ -861,6 +1182,11 @@ impl AiRouter {
                 "no configured provider matched this policy".to_string(),
             ));
         }
+        if last_error_code == Some("AI_ZERO_COST_POLICY") {
+            return Err(CoreError::AiZeroCostPolicy(last_error.unwrap_or_else(
+                || "provider was blocked by the ZERO cost policy".to_string(),
+            )));
+        }
         Err(CoreError::AiProvider {
             provider: "router".to_string(),
             message: last_error.unwrap_or_else(|| "all providers failed".to_string()),
@@ -869,18 +1195,36 @@ impl AiRouter {
 
     fn provider_order(&self, request: &AiTaskRequest) -> Vec<String> {
         if request.local_only || request.capability == CAPABILITY_LOCAL_ONLY {
-            return vec!["local".to_string()];
+            return vec![PROVIDER_LOCAL.to_string()];
         }
         if !request.provider_order.is_empty() {
             return request.provider_order.clone();
         }
         match request.capability.as_str() {
-            CAPABILITY_VISION_ANALYSIS => vec!["gemini", "xai", "openrouter", "groq", "local"],
-            CAPABILITY_TRANSLATION_PT_BR => vec!["gemini", "xai", "groq", "openrouter", "local"],
-            CAPABILITY_STRUCTURED_EXTRACTION => {
-                vec!["gemini", "groq", "xai", "openrouter", "local"]
-            }
-            _ => vec!["gemini", "xai", "groq", "openrouter", "local"],
+            CAPABILITY_VISION_ANALYSIS => vec![
+                PROVIDER_GEMINI,
+                PROVIDER_GROQ,
+                PROVIDER_CLOUDFLARE_WORKERS_AI,
+                PROVIDER_LOCAL,
+            ],
+            CAPABILITY_TRANSLATION_PT_BR => vec![
+                PROVIDER_GEMINI,
+                PROVIDER_GROQ,
+                PROVIDER_CLOUDFLARE_WORKERS_AI,
+                PROVIDER_LOCAL,
+            ],
+            CAPABILITY_STRUCTURED_EXTRACTION => vec![
+                PROVIDER_GEMINI,
+                PROVIDER_GROQ,
+                PROVIDER_CLOUDFLARE_WORKERS_AI,
+                PROVIDER_LOCAL,
+            ],
+            _ => vec![
+                PROVIDER_GEMINI,
+                PROVIDER_GROQ,
+                PROVIDER_CLOUDFLARE_WORKERS_AI,
+                PROVIDER_LOCAL,
+            ],
         }
         .into_iter()
         .map(str::to_string)
@@ -911,7 +1255,7 @@ fn validate_request(request: &AiTaskRequest) -> Result<(), CoreError> {
             "inputText is required".to_string(),
         ));
     }
-    if request.local_only && request.provider_order.iter().any(|id| id != "local") {
+    if request.local_only && request.provider_order.iter().any(|id| id != PROVIDER_LOCAL) {
         return Err(CoreError::AiPolicy(
             "LOCAL_ONLY cannot include cloud providers".to_string(),
         ));
@@ -921,18 +1265,14 @@ fn validate_request(request: &AiTaskRequest) -> Result<(), CoreError> {
 
 fn provider_supports(health: &AiProviderHealth, capability: &str, local_only: bool) -> bool {
     if local_only || capability == CAPABILITY_LOCAL_ONLY {
-        return health.provider_id == "local";
+        return health.provider_id == PROVIDER_LOCAL && health.zero_cost_eligible;
     }
-    let known = [
-        CAPABILITY_STRUCTURED_EXTRACTION,
-        CAPABILITY_SUMMARIZATION,
-        CAPABILITY_TRANSLATION_PT_BR,
-        CAPABILITY_ENTITY_MATCHING,
-        CAPABILITY_TAG_SUGGESTION,
-        CAPABILITY_VALIDATION_ASSIST,
-        CAPABILITY_VISION_ANALYSIS,
-    ];
-    !known.contains(&capability) || health.capabilities.iter().any(|item| item == capability)
+    health.zero_cost_eligible
+        && health.capabilities.iter().any(|item| item == capability)
+        && health
+            .zero_cost_capabilities
+            .iter()
+            .any(|item| item == "*" || item == capability)
 }
 
 fn default_output_schema(task_type: &str) -> Value {
@@ -1022,9 +1362,11 @@ fn new_id(prefix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        AiProvider, AiProviderHealth, AiProviderState, AiRouter, AiTargetRef, AiTaskRequest,
+        cloudflare_model_requires_paid, zero_cost_policy_from_values, AiProvider, AiProviderHealth,
+        AiProviderState, AiRouter, AiTargetRef, AiTaskRequest, CloudflareWorkersAiProvider,
         CuratorProposalDecisionRequest, ProviderError, ProviderErrorKind, ProviderRequest,
-        ProviderResponse, CAPABILITY_LOCAL_ONLY, CAPABILITY_STRUCTURED_EXTRACTION,
+        ProviderResponse, ZeroCostPolicy, CAPABILITY_LOCAL_ONLY, CAPABILITY_STRUCTURED_EXTRACTION,
+        PROVIDER_CLOUDFLARE_WORKERS_AI, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_LOCAL,
     };
     use crate::core::db::CatalogDb;
     use crate::core::pack::{PackRuntime, BUNDLED_PACK_ID};
@@ -1033,6 +1375,7 @@ mod tests {
     struct FakeProvider {
         id: &'static str,
         state: AiProviderState,
+        zero_cost_eligible: bool,
         outputs: std::sync::Mutex<Vec<Result<ProviderResponse, ProviderError>>>,
     }
 
@@ -1042,6 +1385,11 @@ mod tests {
                 provider_id: self.id.to_string(),
                 model: "fake-model".to_string(),
                 state: self.state,
+                zero_cost_eligible: self.zero_cost_eligible,
+                zero_cost_capabilities: vec![
+                    CAPABILITY_STRUCTURED_EXTRACTION.to_string(),
+                    CAPABILITY_LOCAL_ONLY.to_string(),
+                ],
                 capabilities: vec![
                     CAPABILITY_STRUCTURED_EXTRACTION.to_string(),
                     CAPABILITY_LOCAL_ONLY.to_string(),
@@ -1092,11 +1440,231 @@ mod tests {
         }
     }
 
+    fn free_provider(
+        id: &'static str,
+        output: Result<ProviderResponse, ProviderError>,
+    ) -> Box<dyn AiProvider> {
+        Box::new(FakeProvider {
+            id,
+            state: AiProviderState::Available,
+            zero_cost_eligible: true,
+            outputs: std::sync::Mutex::new(vec![output]),
+        })
+    }
+
+    #[test]
+    fn active_provider_inventory_is_zero_cost_only() {
+        let report = AiRouter::from_env().health();
+        let ids = report
+            .providers
+            .iter()
+            .map(|provider| provider.provider_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(report.allowed_cost, "ZERO");
+        assert!(ids.contains(&PROVIDER_GEMINI));
+        assert!(ids.contains(&PROVIDER_GROQ));
+        assert!(ids.contains(&PROVIDER_CLOUDFLARE_WORKERS_AI));
+        assert!(ids.contains(&PROVIDER_LOCAL));
+        assert!(!ids.contains(&"xai"));
+        assert!(!ids.contains(&"openrouter"));
+    }
+
+    #[test]
+    fn model_and_capability_must_be_explicitly_marked_zero_cost() {
+        let models = vec!["gemini-free-model".to_string()];
+        let capabilities = vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()];
+        assert!(
+            zero_cost_policy_from_values(
+                "ZERO",
+                "gemini-free-model",
+                &models,
+                capabilities.clone()
+            )
+            .model_eligible
+        );
+        assert!(
+            !zero_cost_policy_from_values(
+                "PAID",
+                "gemini-free-model",
+                &models,
+                capabilities.clone()
+            )
+            .model_eligible
+        );
+        assert!(
+            !zero_cost_policy_from_values("ZERO", "unlisted-model", &models, capabilities)
+                .model_eligible
+        );
+    }
+
+    #[test]
+    fn free_tier_provider_ids_can_each_be_selected() {
+        for provider_id in [
+            PROVIDER_GEMINI,
+            PROVIDER_GROQ,
+            PROVIDER_CLOUDFLARE_WORKERS_AI,
+        ] {
+            let router =
+                AiRouter::with_providers(vec![free_provider(provider_id, Ok(review_output()))]);
+            let mut database = CatalogDb::in_memory().unwrap();
+            database.seed_bundled_milano().unwrap();
+            let mut task = request(false);
+            task.provider_order = vec![provider_id.to_string()];
+            let result = router.run(&mut database, task).unwrap();
+            assert_eq!(result.execution.provider_id, provider_id);
+            assert_eq!(result.execution.cost, Some(0.0));
+        }
+    }
+
+    #[test]
+    fn paid_provider_is_skipped_even_when_requested_first() {
+        let router = AiRouter::with_providers(vec![
+            Box::new(FakeProvider {
+                id: "paid-model",
+                state: AiProviderState::Available,
+                zero_cost_eligible: false,
+                outputs: std::sync::Mutex::new(vec![]),
+            }),
+            free_provider(PROVIDER_GROQ, Ok(review_output())),
+        ]);
+        let mut database = CatalogDb::in_memory().unwrap();
+        database.seed_bundled_milano().unwrap();
+        let mut task = request(false);
+        task.provider_order = vec!["paid-model".to_string(), PROVIDER_GROQ.to_string()];
+        let result = router.run(&mut database, task).unwrap();
+        assert_eq!(result.execution.provider_id, PROVIDER_GROQ);
+    }
+
+    #[test]
+    fn cloudflare_paid_model_is_unavailable_without_network_call() {
+        assert!(cloudflare_model_requires_paid("@cf/moonshotai/kimi-k2.6"));
+        assert!(!cloudflare_model_requires_paid("@cf/zai-org/glm-4.7-flash"));
+        let provider = CloudflareWorkersAiProvider::new(
+            Some("account".to_string()),
+            Some("token".to_string()),
+            "@cf/moonshotai/kimi-k2.6".to_string(),
+            ZeroCostPolicy {
+                model_eligible: false,
+                capabilities: vec![],
+            },
+            vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            reqwest::blocking::Client::new(),
+        );
+        let health = provider.health();
+        assert_eq!(health.state, AiProviderState::Unavailable);
+        assert!(!health.zero_cost_eligible);
+
+        let free_provider = CloudflareWorkersAiProvider::new(
+            Some("account".to_string()),
+            Some("token".to_string()),
+            "@cf/zai-org/glm-4.7-flash".to_string(),
+            ZeroCostPolicy {
+                model_eligible: true,
+                capabilities: vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            },
+            vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            reqwest::blocking::Client::new(),
+        );
+        assert_eq!(free_provider.health().state, AiProviderState::Available);
+    }
+
+    #[test]
+    fn free_quota_falls_back_to_free_provider_then_local() {
+        let router = AiRouter::with_providers(vec![
+            free_provider(
+                PROVIDER_GEMINI,
+                Err(ProviderError::new(
+                    ProviderErrorKind::RateLimited,
+                    "quota exhausted",
+                )),
+            ),
+            free_provider(
+                PROVIDER_GROQ,
+                Err(ProviderError::new(
+                    ProviderErrorKind::RateLimited,
+                    "quota exhausted",
+                )),
+            ),
+            free_provider(PROVIDER_LOCAL, Ok(review_output())),
+        ]);
+        let mut database = CatalogDb::in_memory().unwrap();
+        database.seed_bundled_milano().unwrap();
+        let mut task = request(false);
+        task.provider_order = vec![
+            PROVIDER_GEMINI.to_string(),
+            PROVIDER_GROQ.to_string(),
+            PROVIDER_LOCAL.to_string(),
+        ];
+        let result = router.run(&mut database, task).unwrap();
+        assert_eq!(result.execution.provider_id, PROVIDER_LOCAL);
+        assert_eq!(result.execution.fallback_step, 2);
+    }
+
+    #[test]
+    fn exhausted_free_paths_degrade_curator_without_paid_fallback() {
+        let router = AiRouter::with_providers(vec![
+            free_provider(
+                PROVIDER_GEMINI,
+                Err(ProviderError::new(
+                    ProviderErrorKind::RateLimited,
+                    "quota exhausted",
+                )),
+            ),
+            free_provider(
+                PROVIDER_GROQ,
+                Err(ProviderError::new(
+                    ProviderErrorKind::RateLimited,
+                    "quota exhausted",
+                )),
+            ),
+        ]);
+        let mut database = CatalogDb::in_memory().unwrap();
+        database.seed_bundled_milano().unwrap();
+        let mut task = request(false);
+        task.provider_order = vec![PROVIDER_GEMINI.to_string(), PROVIDER_GROQ.to_string()];
+        assert!(matches!(
+            router.run(&mut database, task),
+            Err(crate::core::error::CoreError::AiProvider { .. })
+        ));
+        let report = router.health();
+        assert_eq!(report.router_state, AiProviderState::Degraded);
+        assert!(report
+            .providers
+            .iter()
+            .all(|provider| provider.state == AiProviderState::RateLimited));
+    }
+
+    #[test]
+    fn non_zero_provider_cost_is_rejected_and_never_persisted_as_success() {
+        let router = AiRouter::with_providers(vec![
+            free_provider(
+                PROVIDER_GEMINI,
+                Ok(ProviderResponse {
+                    cost: Some(0.01),
+                    ..review_output()
+                }),
+            ),
+            free_provider(PROVIDER_LOCAL, Ok(review_output())),
+        ]);
+        let mut database = CatalogDb::in_memory().unwrap();
+        database.seed_bundled_milano().unwrap();
+        let mut task = request(false);
+        task.provider_order = vec![PROVIDER_GEMINI.to_string(), PROVIDER_LOCAL.to_string()];
+        let result = router.run(&mut database, task).unwrap();
+        assert_eq!(result.execution.provider_id, PROVIDER_LOCAL);
+        assert_eq!(result.execution.cost, Some(0.0));
+        let executions = database.ai_executions(20).unwrap();
+        assert!(executions
+            .iter()
+            .any(|execution| execution.error_code.as_deref() == Some("AI_ZERO_COST_POLICY")));
+    }
+
     #[test]
     fn no_provider_is_degraded_and_does_not_block_the_catalog() {
         let router = AiRouter::with_providers(vec![Box::new(FakeProvider {
             id: "primary",
             state: AiProviderState::NotConfigured,
+            zero_cost_eligible: false,
             outputs: std::sync::Mutex::new(vec![]),
         })]);
         assert_eq!(router.health().router_state, AiProviderState::Degraded);
@@ -1116,6 +1684,7 @@ mod tests {
             Box::new(FakeProvider {
                 id: "primary",
                 state: AiProviderState::Available,
+                zero_cost_eligible: true,
                 outputs: std::sync::Mutex::new(vec![Ok(ProviderResponse {
                     output: json!({ "summary": "missing required fields" }),
                     usage: None,
@@ -1125,6 +1694,7 @@ mod tests {
             Box::new(FakeProvider {
                 id: "fallback",
                 state: AiProviderState::Available,
+                zero_cost_eligible: true,
                 outputs: std::sync::Mutex::new(vec![Ok(review_output())]),
             }),
         ]);
@@ -1142,6 +1712,7 @@ mod tests {
         let router = AiRouter::with_providers(vec![Box::new(FakeProvider {
             id: "cloud",
             state: AiProviderState::Available,
+            zero_cost_eligible: true,
             outputs: std::sync::Mutex::new(vec![Ok(review_output())]),
         })]);
         let mut database = CatalogDb::in_memory().unwrap();
@@ -1158,6 +1729,7 @@ mod tests {
             Box::new(FakeProvider {
                 id: "primary",
                 state: AiProviderState::Available,
+                zero_cost_eligible: true,
                 outputs: std::sync::Mutex::new(vec![Err(ProviderError::new(
                     ProviderErrorKind::RateLimited,
                     "rate limited",
@@ -1166,6 +1738,7 @@ mod tests {
             Box::new(FakeProvider {
                 id: "fallback",
                 state: AiProviderState::Available,
+                zero_cost_eligible: true,
                 outputs: std::sync::Mutex::new(vec![Ok(review_output())]),
             }),
         ]);
@@ -1182,6 +1755,7 @@ mod tests {
             Box::new(FakeProvider {
                 id: "primary",
                 state: AiProviderState::Available,
+                zero_cost_eligible: true,
                 outputs: std::sync::Mutex::new(vec![Err(ProviderError::new(
                     ProviderErrorKind::Timeout,
                     "timed out",
@@ -1190,6 +1764,7 @@ mod tests {
             Box::new(FakeProvider {
                 id: "fallback",
                 state: AiProviderState::Available,
+                zero_cost_eligible: true,
                 outputs: std::sync::Mutex::new(vec![Ok(review_output())]),
             }),
         ]);
@@ -1205,6 +1780,7 @@ mod tests {
         let router = AiRouter::with_providers(vec![Box::new(FakeProvider {
             id: "primary",
             state: AiProviderState::Available,
+            zero_cost_eligible: true,
             outputs: std::sync::Mutex::new(vec![Ok(ProviderResponse {
                 output: json!({
                     "source": {

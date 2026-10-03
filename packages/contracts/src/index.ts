@@ -56,6 +56,7 @@ export type IpcErrorCode =
   | "INTERNAL_ERROR"
   | "AI_NOT_CONFIGURED"
   | "AI_PROVIDER_ERROR"
+  | "AI_ZERO_COST_POLICY"
   | "AI_VALIDATION_FAILED"
   | "AI_POLICY_ERROR";
 
@@ -67,6 +68,14 @@ export interface IpcResponse<T> {
 
 export const READ_CONTRACT_VERSION = "1.0" as const;
 export const AI_CONTRACT_VERSION = "1.0" as const;
+export const AI_ALLOWED_COST = "ZERO" as const;
+
+export const AI_PROVIDERS = {
+  gemini: "gemini",
+  groq: "groq",
+  cloudflareWorkersAi: "cloudflare_workers_ai",
+  local: "local",
+} as const;
 
 export type AiProviderState =
   | "AVAILABLE"
@@ -79,12 +88,15 @@ export interface AiProviderHealth {
   providerId: string;
   model: string;
   state: AiProviderState;
+  zeroCostEligible: boolean;
+  zeroCostCapabilities: string[];
   capabilities: string[];
   detail?: string;
 }
 
 export interface AiHealthReport {
   contractVersion: typeof AI_CONTRACT_VERSION;
+  allowedCost: typeof AI_ALLOWED_COST;
   routerState: AiProviderState;
   providers: AiProviderHealth[];
   capabilities: string[];

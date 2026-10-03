@@ -34,6 +34,8 @@ pub enum CoreError {
     AiValidation(String),
     #[error("AI policy error: {0}")]
     AiPolicy(String),
+    #[error("AI ZERO cost policy blocked execution: {0}")]
+    AiZeroCostPolicy(String),
     #[error("core state lock is poisoned")]
     StatePoisoned,
 }
@@ -63,6 +65,7 @@ impl CoreError {
             Self::AiProvider { .. } => "AI_PROVIDER_ERROR",
             Self::AiValidation(_) => "AI_VALIDATION_FAILED",
             Self::AiPolicy(_) => "AI_POLICY_ERROR",
+            Self::AiZeroCostPolicy(_) => "AI_ZERO_COST_POLICY",
             Self::Pack(_) => "PACK_ERROR",
             Self::Database(_)
             | Self::Io(_)
