@@ -1,4 +1,5 @@
 use crate::core::error::CoreError;
+use crate::core::read::{PageRequest, ReadPage, ReadState, READ_CONTRACT_VERSION};
 use crate::core::state::CoreState;
 use serde::Serialize;
 use tauri::State;
@@ -8,6 +9,7 @@ use tauri::State;
 pub struct CoreHealth {
     pub status: &'static str,
     pub protocol_version: &'static str,
+    pub contract_version: &'static str,
     pub storage: &'static str,
     pub fts5: &'static str,
     pub migration_count: usize,
@@ -22,6 +24,7 @@ pub fn core_health(state: State<'_, CoreState>) -> Result<CoreHealth, CoreError>
     Ok(CoreHealth {
         status: "ok",
         protocol_version: "0.1",
+        contract_version: READ_CONTRACT_VERSION,
         storage: "sqlite",
         fts5: if database.has_fts5()? {
             "ready"
@@ -49,6 +52,19 @@ pub fn catalog_milano_ss27(
         .database
         .lock()
         .map_err(|_| CoreError::StatePoisoned)?;
+    match database.read_state_for_pack("nex.fashion.milano.ss27")? {
+        ReadState::Available => {}
+        ReadState::PackRemoved => {
+            return Err(CoreError::PackRemoved(
+                "nex.fashion.milano.ss27".to_string(),
+            ))
+        }
+        _ => {
+            return Err(CoreError::PackNotInstalled(
+                "nex.fashion.milano.ss27".to_string(),
+            ))
+        }
+    }
     database.milano_snapshot()
 }
 
@@ -56,13 +72,13 @@ pub fn catalog_milano_ss27(
 pub fn catalog_search(
     state: State<'_, CoreState>,
     query: String,
-    limit: Option<u32>,
-) -> Result<Vec<crate::core::db::SearchRow>, CoreError> {
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::db::SearchRow>, CoreError> {
     let database = state
         .database
         .lock()
         .map_err(|_| CoreError::StatePoisoned)?;
-    database.search(&query, limit.unwrap_or(50).min(200))
+    database.search_page(&query, request.unwrap_or_default())
 }
 
 #[tauri::command]
@@ -124,4 +140,374 @@ pub fn pack_repair(
         .lock()
         .map_err(|_| CoreError::StatePoisoned)?;
     state.packs.repair(&mut database, &pack_id)
+}
+
+#[tauri::command]
+pub fn catalog_geography(
+    state: State<'_, CoreState>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::GeoCityRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_geography(request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_city_hubs(
+    state: State<'_, CoreState>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::CityHubRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_city_hubs(request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_city_hub(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<crate::core::read::CityHubRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_city_hub(&id)
+}
+
+#[tauri::command]
+pub fn catalog_events(
+    state: State<'_, CoreState>,
+    city_hub_id: Option<String>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::EventRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_events(city_hub_id.as_deref(), request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_event(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<crate::core::read::EventRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_event(&id)
+}
+
+#[tauri::command]
+pub fn catalog_editions(
+    state: State<'_, CoreState>,
+    event_id: Option<String>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::EditionRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_editions(event_id.as_deref(), request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_edition(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<crate::core::read::EditionRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_edition(&id)
+}
+
+#[tauri::command]
+pub fn catalog_schedule(
+    state: State<'_, CoreState>,
+    edition_id: String,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::ScheduleEntryRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_schedule(&edition_id, request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_venues(
+    state: State<'_, CoreState>,
+    city_id: Option<String>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::VenueRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_venues(city_id.as_deref(), request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_venue(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<crate::core::read::VenueRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_venue(&id)
+}
+
+#[tauri::command]
+pub fn catalog_maisons(
+    state: State<'_, CoreState>,
+    edition_id: Option<String>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::MaisonRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_maisons(edition_id.as_deref(), request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_maison(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<crate::core::read::MaisonRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_maison(&id)
+}
+
+#[tauri::command]
+pub fn catalog_persons(
+    state: State<'_, CoreState>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::PersonRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_persons(request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_person(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<crate::core::read::PersonRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_person(&id)
+}
+
+#[tauri::command]
+pub fn catalog_roles(
+    state: State<'_, CoreState>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::RoleRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_roles(request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_person_roles(
+    state: State<'_, CoreState>,
+    person_id: Option<String>,
+    context_entity_type: Option<String>,
+    context_entity_id: Option<String>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::PersonRoleRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_person_roles(
+        person_id.as_deref(),
+        context_entity_type.as_deref(),
+        context_entity_id.as_deref(),
+        request.unwrap_or_default(),
+    )
+}
+
+#[tauri::command]
+pub fn catalog_collections(
+    state: State<'_, CoreState>,
+    edition_id: Option<String>,
+    maison_id: Option<String>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::CollectionRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_collections(
+        edition_id.as_deref(),
+        maison_id.as_deref(),
+        request.unwrap_or_default(),
+    )
+}
+
+#[tauri::command]
+pub fn catalog_collection(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<crate::core::read::CollectionRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_collection(&id)
+}
+
+#[tauri::command]
+pub fn catalog_looks(
+    state: State<'_, CoreState>,
+    collection_id: String,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::LookRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_looks(&collection_id, request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_media(
+    state: State<'_, CoreState>,
+    entity_type: String,
+    entity_id: String,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::MediaOccurrenceRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_media(&entity_type, &entity_id, request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_media_availability(
+    state: State<'_, CoreState>,
+    entity_type: String,
+    entity_id: String,
+) -> Result<crate::core::read::MediaAvailabilityRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_media_availability(&entity_type, &entity_id)
+}
+
+#[tauri::command]
+pub fn catalog_reviews(
+    state: State<'_, CoreState>,
+    entity_type: String,
+    entity_id: String,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::ReviewRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_reviews(&entity_type, &entity_id, request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_sources(
+    state: State<'_, CoreState>,
+    entity_type: Option<String>,
+    entity_id: Option<String>,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::SourceRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_sources(
+        entity_type.as_deref(),
+        entity_id.as_deref(),
+        request.unwrap_or_default(),
+    )
+}
+
+#[tauri::command]
+pub fn catalog_source(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<crate::core::read::SourceRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_source(&id)
+}
+
+#[tauri::command]
+pub fn catalog_provenance(
+    state: State<'_, CoreState>,
+    entity_type: String,
+    entity_id: String,
+    request: Option<PageRequest>,
+) -> Result<ReadPage<crate::core::read::ProvenanceSummary>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_provenance(&entity_type, &entity_id, request.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn catalog_terms(
+    state: State<'_, CoreState>,
+    source_id: String,
+) -> Result<crate::core::read::ReadEnvelope<crate::core::read::TermsBasic>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_terms(&source_id)
+}
+
+#[tauri::command]
+pub fn personal_related(
+    state: State<'_, CoreState>,
+    entity_id: String,
+) -> Result<crate::core::read::PersonalRelatedRead, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.read_personal_related(&entity_id)
+}
+
+#[tauri::command]
+pub fn personal_favorite_set(
+    state: State<'_, CoreState>,
+    entity_id: String,
+    is_favorite: bool,
+) -> Result<crate::core::read::PersonalRelatedRead, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.set_personal_favorite(&entity_id, is_favorite)
 }
