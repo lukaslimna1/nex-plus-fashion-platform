@@ -1982,6 +1982,204 @@ mod tests {
     }
 
     #[test]
+    fn rate_limiter_buckets_by_source_and_host_and_skips_fixtures() {
+        let limiter = RateLimiter::default();
+        let spec = AdapterRateLimitSpec {
+            requests_per_minute: Some(600),
+            burst: Some(1),
+            retry_after_header: None,
+            notes: None,
+        };
+
+        limiter.wait(
+            "source:test",
+            "https://example.invalid/fixture",
+            &spec,
+            true,
+        );
+        assert!(limiter.next_allowed.lock().unwrap().is_empty());
+
+        limiter.wait("source:test", "https://example.invalid/one", &spec, false);
+        limiter.wait("source:test", "https://example.invalid/two", &spec, false);
+        limiter.wait("source:other", "https://example.invalid/one", &spec, false);
+
+        let slots = limiter.next_allowed.lock().unwrap();
+        assert_eq!(slots.len(), 2);
+        assert!(slots.contains_key("source:test:example.invalid"));
+        assert!(slots.contains_key("source:other:example.invalid"));
+    }
+
+    #[test]
+    fn checkpoint_resume_continues_from_the_next_page_without_restarting() {
+        struct PagedAdapter {
+            cursors: Arc<Mutex<Vec<Option<String>>>>,
+        }
+
+        impl SourceAdapter for PagedAdapter {
+            fn spec(&self) -> AdapterSpec {
+                AdapterSpec {
+                    contract_version: ADAPTER_CONTRACT_VERSION,
+                    adapter_id: "adapter:test:paged".to_string(),
+                    version: "1.0.0".to_string(),
+                    source_ids: vec!["source:test".to_string()],
+                    integration_ids: vec!["integration:test".to_string()],
+                    capabilities: vec![
+                        CAPABILITY_DISCOVER.to_string(),
+                        CAPABILITY_FETCH_API.to_string(),
+                    ],
+                    discovery_strategy: "cursor-api".to_string(),
+                    supported_content_types: vec!["application/json".to_string()],
+                    fetch_strategy: "api".to_string(),
+                    parse_strategy: "json".to_string(),
+                    normalization_strategy: "deterministic".to_string(),
+                    pagination: AdapterPaginationSpec {
+                        supported: true,
+                        strategy: "cursor".to_string(),
+                        cursor_kind: Some("opaque".to_string()),
+                        checkpoint_key: Some("paged-test".to_string()),
+                    },
+                    rate_limit: AdapterRateLimitSpec {
+                        requests_per_minute: None,
+                        burst: None,
+                        retry_after_header: None,
+                        notes: None,
+                    },
+                    retry_policy: AdapterRetrySpec {
+                        max_attempts: 1,
+                        backoff_ms: vec![],
+                        retryable_states: vec![],
+                    },
+                    provenance_support: true,
+                    produces: vec![],
+                    fixture_support: true,
+                    test_support: true,
+                    acquisition_strategies: vec![AcquisitionStrategySpec {
+                        id: "paged-api".to_string(),
+                        method: ACQUISITION_API.to_string(),
+                        priority: 1,
+                        requires_browser: false,
+                        deterministic: true,
+                    }],
+                    scope: AdapterScopeSpec {
+                        allowed_domains: vec!["example.invalid".to_string()],
+                        same_origin_only: true,
+                    },
+                }
+            }
+
+            fn health(&self) -> AdapterHealth {
+                AdapterHealth {
+                    adapter_id: "adapter:test:paged".to_string(),
+                    state: AdapterHealthState::Healthy,
+                    detail: None,
+                    checked_at: None,
+                }
+            }
+
+            fn discover(
+                &self,
+                request: &AdapterRunRequest,
+            ) -> Result<DiscoveryBatch, AdapterError> {
+                let cursor = request.cursor.clone();
+                self.cursors.lock().unwrap().push(cursor.clone());
+                let page = if cursor.as_deref() == Some("page-2") {
+                    "page-2"
+                } else {
+                    "page-1"
+                };
+                Ok(DiscoveryBatch {
+                    items: vec![DiscoveryItem {
+                        discovery_key: format!("test:{page}"),
+                        canonical_url: format!("https://example.invalid/{page}"),
+                        content_type: "application/json".to_string(),
+                        external_key: None,
+                        acquisition_method: ACQUISITION_API.to_string(),
+                        strategy_id: "paged-api".to_string(),
+                        depth: 0,
+                        parent_url: None,
+                        referrer_url: None,
+                        pagination_cursor: None,
+                    }],
+                    next_cursor: (page == "page-1").then(|| "page-2".to_string()),
+                })
+            }
+
+            fn fetch(
+                &self,
+                _request: &AdapterRunRequest,
+                item: &DiscoveryItem,
+                _context: &FetchContext,
+                _http: &HttpAcquisitionClient,
+            ) -> Result<FetchOutcome, AdapterError> {
+                Ok(FetchOutcome::Acquired(raw_input(
+                    &item.canonical_url,
+                    &format!("{{\"page\":\"{}\"}}", item.discovery_key),
+                )))
+            }
+
+            fn parse(&self, _artifact: &RawArtifactInput) -> Result<ParseResult, AdapterError> {
+                Ok(ParseResult {
+                    observations: Vec::new(),
+                    discoveries: Vec::new(),
+                })
+            }
+
+            fn normalize(
+                &self,
+                _request: &AdapterRunRequest,
+                _observation: &ObservationInput,
+                _ai_output: Option<&Value>,
+            ) -> Result<Vec<NormalizedCandidate>, AdapterError> {
+                Ok(Vec::new())
+            }
+        }
+
+        let cursors = Arc::new(Mutex::new(Vec::new()));
+        let registry = AdapterRegistry {
+            adapters: vec![Box::new(PagedAdapter {
+                cursors: Arc::clone(&cursors),
+            })],
+            http: HttpAcquisitionClient::new(),
+            rate_limiter: RateLimiter::default(),
+            cancellations: Arc::new(Mutex::new(HashSet::new())),
+        };
+        let (mut database, _runtime, root) = installed_database();
+        let mut first_request =
+            test_request("adapter:test:paged", "source:test", CAPABILITY_DISCOVER);
+        first_request.max_items = Some(1);
+        first_request.checkpoint_key = Some("paged-test".to_string());
+        registry
+            .run(&mut database, &AiRouter::from_env(), first_request)
+            .unwrap();
+        let checkpoint = database
+            .ingestion_checkpoint("adapter:test:paged", "source:test", "paged-test")
+            .unwrap()
+            .unwrap();
+        assert_eq!(checkpoint.0.as_deref(), Some("page-2"));
+
+        let mut second_request =
+            test_request("adapter:test:paged", "source:test", CAPABILITY_DISCOVER);
+        second_request.checkpoint_key = Some("paged-test".to_string());
+        registry
+            .run(&mut database, &AiRouter::from_env(), second_request)
+            .unwrap();
+        assert_eq!(
+            cursors.lock().unwrap().as_slice(),
+            &[None, Some("page-2".to_string())]
+        );
+        let completed = database
+            .ingestion_checkpoint("adapter:test:paged", "source:test", "paged-test")
+            .unwrap()
+            .unwrap();
+        assert_eq!(completed.0.as_deref(), Some("complete"));
+        assert_eq!(
+            database.raw_artifact_count("adapter:test:paged").unwrap(),
+            2
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn unsupported_capability_is_rejected_without_running_adapter() {
         let registry = AdapterRegistry::built_in();
         let (mut database, _runtime, root) = installed_database();
