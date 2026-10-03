@@ -60,7 +60,10 @@ mod tests {
     #[test]
     fn baseline_migrations_create_sqlite_and_fts5() {
         let database = CatalogDb::in_memory().expect("baseline database should initialize");
-        assert_eq!(database.migration_names().unwrap(), vec!["0001_core", "0002_fts5"]);
+        assert_eq!(
+            database.migration_names().unwrap(),
+            vec!["0001_core", "0002_fts5"]
+        );
         assert!(database.has_fts5().unwrap());
     }
 }
