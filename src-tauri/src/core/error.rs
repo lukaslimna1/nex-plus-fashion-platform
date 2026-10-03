@@ -49,6 +49,12 @@ pub enum CoreError {
     },
     #[error("adapter error: {0}")]
     Adapter(String),
+    #[error("adapter run cancelled")]
+    AdapterCancelled,
+    #[error("adapter browser automation is required but no browser worker is configured")]
+    AdapterBrowserRequired,
+    #[error("adapter response exceeded the configured maximum size")]
+    AdapterResponseTooLarge,
     #[error("core state lock is poisoned")]
     StatePoisoned,
 }
@@ -84,6 +90,9 @@ impl CoreError {
             Self::AdapterNotFound(_) => "ADAPTER_NOT_FOUND",
             Self::AdapterCapabilityUnsupported { .. } => "ADAPTER_CAPABILITY_UNSUPPORTED",
             Self::Adapter(_) => "ADAPTER_ERROR",
+            Self::AdapterCancelled => "ADAPTER_CANCELLED",
+            Self::AdapterBrowserRequired => "ADAPTER_BROWSER_REQUIRED",
+            Self::AdapterResponseTooLarge => "ADAPTER_RESPONSE_TOO_LARGE",
             Self::Pack(_) => "PACK_ERROR",
             Self::Database(_)
             | Self::Io(_)

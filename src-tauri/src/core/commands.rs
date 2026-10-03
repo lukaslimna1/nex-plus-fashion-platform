@@ -162,7 +162,21 @@ pub fn curator_adapter_run(
         .database
         .lock()
         .map_err(|_| CoreError::StatePoisoned)?;
-    state.adapters.run(&mut database, request)
+    state.adapters.run(&mut database, &state.ai, request)
+}
+
+#[tauri::command]
+pub fn curator_adapter_cancel(
+    state: State<'_, CoreState>,
+    cancel_key: String,
+) -> Result<(), CoreError> {
+    if cancel_key.trim().is_empty() {
+        return Err(CoreError::InvalidRequest(
+            "cancelKey is required".to_string(),
+        ));
+    }
+    state.adapters.cancel(&cancel_key);
+    Ok(())
 }
 
 #[tauri::command]

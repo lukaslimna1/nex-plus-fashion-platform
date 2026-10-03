@@ -8,6 +8,7 @@ export const BASELINE_MIGRATIONS = [
   "0005_personal_favorite",
   "0006_ai_curator",
   "0007_adapter_framework",
+  "0008_acquisition_progressive",
 ] as const;
 
 export const MILANO_SS27_PACK_ID = "nex.fashion.milano.ss27" as const;
@@ -64,7 +65,10 @@ export type IpcErrorCode =
   | "AI_POLICY_ERROR"
   | "ADAPTER_NOT_FOUND"
   | "ADAPTER_CAPABILITY_UNSUPPORTED"
-  | "ADAPTER_ERROR";
+  | "ADAPTER_ERROR"
+  | "ADAPTER_CANCELLED"
+  | "ADAPTER_BROWSER_REQUIRED"
+  | "ADAPTER_RESPONSE_TOO_LARGE";
 
 export interface IpcResponse<T> {
   ok: boolean;
@@ -292,6 +296,21 @@ export interface AdapterSpec {
   produces: string[];
   fixtureSupport: boolean;
   testSupport: boolean;
+  acquisitionStrategies: AcquisitionStrategySpec[];
+  scope: AdapterScopeSpec;
+}
+
+export interface AcquisitionStrategySpec {
+  id: string;
+  method: "api" | "json" | "rss" | "html" | "browser" | "media_endpoint" | "sitemap" | "channel_feed" | "fixture";
+  priority: number;
+  deterministic: boolean;
+  requiresBrowser: boolean;
+}
+
+export interface AdapterScopeSpec {
+  allowedDomains: string[];
+  sameOriginOnly: boolean;
 }
 
 export interface AdapterHealth {
@@ -315,6 +334,13 @@ export interface AdapterRunRequest {
   checkpointKey?: string;
   fixtureMode?: boolean;
   maxItems?: number;
+  maxPages?: number;
+  maxDepth?: number;
+  maxBytes?: number;
+  maxDurationMs?: number;
+  resume?: boolean;
+  aiAssist?: boolean;
+  cancelKey?: string;
 }
 
 export interface AdapterRun {
@@ -350,7 +376,14 @@ export interface RawArtifact {
   contentRef?: string;
   etag?: string;
   lastModified?: string;
+  finalUrl?: string;
+  acquisitionMethod: string;
+  httpStatus?: number;
+  parentUrl?: string;
+  referrerUrl?: string;
+  pagination: Record<string, unknown>;
   retrievedAt: string;
+  fetchedAt: string;
   retrievalStatus: string;
 }
 

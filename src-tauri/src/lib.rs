@@ -30,6 +30,7 @@ pub fn run() {
             core::commands::curator_raw_artifacts,
             core::commands::curator_ingestion_candidates,
             core::commands::curator_adapter_run,
+            core::commands::curator_adapter_cancel,
             core::commands::curator_source_candidates,
             core::commands::curator_source_candidate_create,
             core::commands::curator_adapter_candidates,

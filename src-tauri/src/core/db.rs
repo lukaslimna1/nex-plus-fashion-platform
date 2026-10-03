@@ -21,7 +21,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-const MIGRATIONS: [(&str, &str); 7] = [
+const MIGRATIONS: [(&str, &str); 8] = [
     ("0001_core", include_str!("../../migrations/0001_core.sql")),
     ("0002_fts5", include_str!("../../migrations/0002_fts5.sql")),
     (
@@ -43,6 +43,10 @@ const MIGRATIONS: [(&str, &str); 7] = [
     (
         "0007_adapter_framework",
         include_str!("../../migrations/0007_adapter_framework.sql"),
+    ),
+    (
+        "0008_acquisition_progressive",
+        include_str!("../../migrations/0008_acquisition_progressive.sql"),
     ),
 ];
 
@@ -223,7 +227,14 @@ pub struct RawArtifactRead {
     pub content_ref: Option<String>,
     pub etag: Option<String>,
     pub last_modified: Option<String>,
+    pub final_url: Option<String>,
+    pub acquisition_method: String,
+    pub http_status: Option<u16>,
+    pub parent_url: Option<String>,
+    pub referrer_url: Option<String>,
+    pub pagination: Value,
     pub retrieved_at: String,
+    pub fetched_at: String,
     pub retrieval_status: String,
 }
 
@@ -349,6 +360,25 @@ impl CatalogDb {
     fn apply_migrations(&mut self) -> Result<(), CoreError> {
         let transaction = self.connection.transaction()?;
         for (name, sql) in MIGRATIONS {
+            if name == "0001_core" {
+                transaction.execute_batch(sql)?;
+                transaction.execute(
+                    "INSERT OR IGNORE INTO schema_migration (name) VALUES (?1)",
+                    [name],
+                )?;
+                continue;
+            }
+            let already_applied = transaction
+                .query_row(
+                    "SELECT 1 FROM schema_migration WHERE name=?1",
+                    [name],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()?
+                .is_some();
+            if already_applied {
+                continue;
+            }
             transaction.execute_batch(sql)?;
             transaction.execute(
                 "INSERT OR IGNORE INTO schema_migration (name) VALUES (?1)",
@@ -542,6 +572,7 @@ impl CatalogDb {
         &mut self,
         run_id: &str,
         status: &str,
+        attempts: u32,
         artifact_count: u32,
         observation_count: u32,
         candidate_count: u32,
@@ -554,20 +585,21 @@ impl CatalogDb {
         let changed = self.connection.execute(
             "UPDATE adapter_run
              SET status=?1, artifact_count=?2, observation_count=?3, candidate_count=?4,
-                 changed_count=?5, cursor=?6, error_code=?7, error_message=?8, completed_at=?9,
-                 checkpoint_json=json_set(checkpoint_json, '$.cursor', ?6)
-             WHERE run_id=?10",
+                 changed_count=?5, attempts=?6, cursor=?7, error_code=?8, error_message=?9, completed_at=?10,
+                 checkpoint_json=json_set(checkpoint_json, '$.cursor', ?7)
+             WHERE run_id=?11",
             params![
                 status,
                 i64::from(artifact_count),
                 i64::from(observation_count),
                 i64::from(candidate_count),
                 i64::from(changed_count),
+                i64::from(attempts),
                 cursor,
                 error_code,
                 error_message,
                 completed_at,
-                run_id
+                run_id,
             ],
         )?;
         if changed == 0 {
@@ -616,7 +648,8 @@ impl CatalogDb {
         let mut statement = self.connection.prepare(
             "SELECT artifact_id, source_id, adapter_id, integration_id, canonical_url,
                     content_type, content_hash, byte_size, storage_kind, content_ref, etag,
-                    last_modified, retrieved_at, retrieval_status
+                    last_modified, final_url, acquisition_method, http_status, parent_url,
+                    referrer_url, pagination_json, retrieved_at, retrieval_status
              FROM raw_artifact
              WHERE (?1='' OR adapter_id=?1)
              ORDER BY retrieved_at DESC, artifact_id DESC LIMIT ?2",
@@ -665,6 +698,25 @@ impl CatalogDb {
     ) -> Result<RawArtifactStored, CoreError> {
         let canonical_url = normalize_source_url(&raw.canonical_url);
         let content_hash = sha256_bytes(raw.content.as_bytes());
+        let now = self.current_timestamp()?;
+        self.connection.execute(
+            "INSERT INTO raw_artifact_body
+             (content_hash, content_type, byte_size, content_text, content_ref, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+             ON CONFLICT(content_hash) DO UPDATE SET
+              content_type=excluded.content_type,
+              byte_size=excluded.byte_size,
+              content_ref=COALESCE(raw_artifact_body.content_ref, excluded.content_ref),
+              updated_at=excluded.updated_at",
+            params![
+                content_hash,
+                raw.content_type,
+                i64::try_from(raw.content.len()).unwrap_or(i64::MAX),
+                raw.content,
+                raw.content_ref,
+                now,
+            ],
+        )?;
         let existing = self
             .connection
             .query_row(
@@ -674,22 +726,30 @@ impl CatalogDb {
                 |row| row.get::<_, String>(0),
             )
             .optional()?;
-        let artifact_id =
-            existing.unwrap_or_else(|| format!("artifact:{adapter_id}:{content_hash}"));
+        let artifact_id = existing.unwrap_or_else(|| {
+            format!(
+                "artifact:{adapter_id}:{}:{content_hash}",
+                sha256_bytes(canonical_url.as_bytes())
+            )
+        });
         self.connection.execute(
             "INSERT INTO raw_artifact
              (artifact_id, source_id, adapter_id, integration_id, canonical_url, content_type,
-              content_hash, byte_size, storage_kind, content_text, content_ref, etag,
-              last_modified, retrieved_at, retrieval_status, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'inline', ?9, ?10, ?11, ?12,
-                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'acquired',
-                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+             content_hash, byte_size, storage_kind, content_text, content_ref, etag,
+              last_modified, final_url, acquisition_method, http_status, parent_url,
+             referrer_url, pagination_json, retrieved_at, retrieval_status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'external', NULL,
+                     'body:' || ?7, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+                     ?16, ?17, ?18, ?17, ?17)
              ON CONFLICT(adapter_id, canonical_url, content_hash) DO UPDATE SET
               source_id=excluded.source_id, integration_id=excluded.integration_id,
               content_type=excluded.content_type, byte_size=excluded.byte_size,
-              content_text=excluded.content_text, content_ref=excluded.content_ref,
+              storage_kind=excluded.storage_kind, content_text=NULL,
+              content_ref='body:' || excluded.content_hash,
               etag=excluded.etag, last_modified=excluded.last_modified,
+              final_url=excluded.final_url, acquisition_method=excluded.acquisition_method,
+              http_status=excluded.http_status, parent_url=excluded.parent_url,
+              referrer_url=excluded.referrer_url, pagination_json=excluded.pagination_json,
               retrieved_at=excluded.retrieved_at, retrieval_status=excluded.retrieval_status,
               updated_at=excluded.updated_at",
             params![
@@ -701,16 +761,77 @@ impl CatalogDb {
                 raw.content_type,
                 content_hash,
                 i64::try_from(raw.content.len()).unwrap_or(i64::MAX),
-                raw.content,
-                raw.content_ref,
                 raw.etag,
                 raw.last_modified,
+                raw.final_url,
+                raw.acquisition_method,
+                raw.http_status.map(i64::from),
+                raw.parent_url,
+                raw.referrer_url,
+                serde_json::to_string(&raw.pagination)?,
+                now,
+                raw.retrieval_status,
             ],
         )?;
         Ok(RawArtifactStored {
             artifact_id,
             content_hash,
         })
+    }
+
+    pub fn raw_artifact_validators(
+        &self,
+        adapter_id: &str,
+        canonical_url: &str,
+    ) -> Result<Option<(Option<String>, Option<String>)>, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT etag, last_modified FROM raw_artifact
+                 WHERE adapter_id=?1 AND canonical_url=?2
+                 ORDER BY retrieved_at DESC LIMIT 1",
+                params![adapter_id, normalize_source_url(canonical_url)],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(CoreError::from)
+    }
+
+    pub fn mark_raw_artifact_not_modified(
+        &mut self,
+        adapter_id: &str,
+        canonical_url: &str,
+        final_url: Option<&str>,
+        http_status: u16,
+        etag: Option<&str>,
+        last_modified: Option<&str>,
+        acquisition_method: &str,
+        parent_url: Option<&str>,
+        referrer_url: Option<&str>,
+        pagination: &Value,
+    ) -> Result<bool, CoreError> {
+        let changed = self.connection.execute(
+            "UPDATE raw_artifact
+             SET final_url=COALESCE(?1, final_url), http_status=?2,
+                 etag=COALESCE(?3, etag), last_modified=COALESCE(?4, last_modified),
+                 acquisition_method=?5, parent_url=?6, referrer_url=?7,
+                 pagination_json=?8, retrieval_status='not_modified',
+                 retrieved_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                 updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE adapter_id=?9 AND canonical_url=?10",
+            params![
+                final_url,
+                i64::from(http_status),
+                etag,
+                last_modified,
+                acquisition_method,
+                parent_url,
+                referrer_url,
+                serde_json::to_string(pagination)?,
+                adapter_id,
+                normalize_source_url(canonical_url),
+            ],
+        )?;
+        Ok(changed > 0)
     }
 
     pub fn upsert_source_observation(
@@ -930,6 +1051,23 @@ impl CatalogDb {
             ],
         )?;
         Ok(())
+    }
+
+    pub fn ingestion_checkpoint(
+        &self,
+        adapter_id: &str,
+        source_id: &str,
+        checkpoint_key: &str,
+    ) -> Result<Option<(Option<String>, Option<String>)>, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT cursor, content_hash FROM ingestion_checkpoint
+                 WHERE adapter_id=?1 AND source_id=?2 AND checkpoint_key=?3",
+                params![adapter_id, source_id, checkpoint_key],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(CoreError::from)
     }
 
     pub fn upsert_source_candidate(
@@ -4434,6 +4572,8 @@ fn read_adapter_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<AdapterRunRead>
 }
 
 fn read_raw_artifact(row: &rusqlite::Row<'_>) -> rusqlite::Result<RawArtifactRead> {
+    let pagination_json: String = row.get(17)?;
+    let retrieved_at: String = row.get(18)?;
     Ok(RawArtifactRead {
         artifact_id: row.get(0)?,
         source_id: row.get(1)?,
@@ -4447,8 +4587,21 @@ fn read_raw_artifact(row: &rusqlite::Row<'_>) -> rusqlite::Result<RawArtifactRea
         content_ref: row.get(9)?,
         etag: row.get(10)?,
         last_modified: row.get(11)?,
-        retrieved_at: row.get(12)?,
-        retrieval_status: row.get(13)?,
+        final_url: row.get(12)?,
+        acquisition_method: row.get(13)?,
+        http_status: row.get::<_, Option<i64>>(14)?.map(|value| value as u16),
+        parent_url: row.get(15)?,
+        referrer_url: row.get(16)?,
+        pagination: serde_json::from_str(&pagination_json).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                17,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })?,
+        retrieved_at: retrieved_at.clone(),
+        fetched_at: retrieved_at,
+        retrieval_status: row.get(19)?,
     })
 }
 
@@ -4595,7 +4748,8 @@ mod tests {
                 "0004_pack_runtime",
                 "0005_personal_favorite",
                 "0006_ai_curator",
-                "0007_adapter_framework"
+                "0007_adapter_framework",
+                "0008_acquisition_progressive"
             ]
         );
         assert!(database.has_fts5().unwrap());

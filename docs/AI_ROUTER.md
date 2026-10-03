@@ -107,3 +107,12 @@ entries are kept in `.env.example`; the local `.env` remains private.
 
 Without a configured route, Curator reports `DEGRADED` while the User catalog,
 Milano Pack, search and Personal remain available.
+# Adapter integration
+
+Source adapters do not select or import an AI provider. When deterministic
+parsing is insufficient, an adapter may request a semantic capability through
+the canonical Router (`STRUCTURED_EXTRACTION`, `ENTITY_MATCHING`,
+`TRANSLATION_PT_BR`, `TAG_SUGGESTION` or `VISION_ANALYSIS`). The Router owns
+provider order, ZERO-cost policy, schema validation, fallback, execution logs
+and Candidate/Proposal persistence. An adapter must remain valid when no AI
+provider is configured.

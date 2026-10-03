@@ -27,7 +27,7 @@ test("baseline contract exposes the local core protocol", () => {
   ]);
   assert.equal(AI_CAPABILITIES.localOnly, "LOCAL_ONLY");
   assert.equal(READ_CONTRACT_VERSION, "1.0");
-  assert.deepEqual(BASELINE_MIGRATIONS, ["0001_core", "0002_fts5", "0003_milano_vertical", "0004_pack_runtime", "0005_personal_favorite", "0006_ai_curator", "0007_adapter_framework"]);
+  assert.deepEqual(BASELINE_MIGRATIONS, ["0001_core", "0002_fts5", "0003_milano_vertical", "0004_pack_runtime", "0005_personal_favorite", "0006_ai_curator", "0007_adapter_framework", "0008_acquisition_progressive"]);
 });
 
 test("adapter contract remains extensible and migration boundary is versioned", () => {
