@@ -36,6 +36,10 @@ pub enum CoreError {
     AiPolicy(String),
     #[error("AI ZERO cost policy blocked execution: {0}")]
     AiZeroCostPolicy(String),
+    #[error("AI zero-cost guarantee is unavailable: {0}")]
+    AiZeroCostNotGuaranteed(String),
+    #[error("AI provider quota is exhausted: {0}")]
+    AiQuotaExhausted(String),
     #[error("core state lock is poisoned")]
     StatePoisoned,
 }
@@ -66,6 +70,8 @@ impl CoreError {
             Self::AiValidation(_) => "AI_VALIDATION_FAILED",
             Self::AiPolicy(_) => "AI_POLICY_ERROR",
             Self::AiZeroCostPolicy(_) => "AI_ZERO_COST_POLICY",
+            Self::AiZeroCostNotGuaranteed(_) => "AI_ZERO_COST_NOT_GUARANTEED",
+            Self::AiQuotaExhausted(_) => "AI_QUOTA_EXHAUSTED",
             Self::Pack(_) => "PACK_ERROR",
             Self::Database(_)
             | Self::Io(_)

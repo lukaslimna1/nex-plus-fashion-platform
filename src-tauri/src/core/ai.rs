@@ -13,7 +13,10 @@ pub const ALLOWED_COST: &str = "ZERO";
 pub const PROVIDER_GEMINI: &str = "gemini";
 pub const PROVIDER_GROQ: &str = "groq";
 pub const PROVIDER_CLOUDFLARE_WORKERS_AI: &str = "cloudflare_workers_ai";
-pub const PROVIDER_LOCAL: &str = "local";
+pub const PROVIDER_MISTRAL: &str = "mistral";
+pub const PROVIDER_HUGGING_FACE: &str = "hugging_face";
+pub const PROVIDER_LOCAL_LLAMA_CPP: &str = "local_llama_cpp";
+pub const PROVIDER_LOCAL: &str = PROVIDER_LOCAL_LLAMA_CPP;
 pub const CAPABILITY_STRUCTURED_EXTRACTION: &str = "STRUCTURED_EXTRACTION";
 pub const CAPABILITY_SUMMARIZATION: &str = "SUMMARIZATION";
 pub const CAPABILITY_TRANSLATION_PT_BR: &str = "TRANSLATION_PT_BR";
@@ -29,6 +32,8 @@ pub enum AiProviderState {
     Available,
     Degraded,
     RateLimited,
+    QuotaExhausted,
+    ZeroCostNotGuaranteed,
     Unavailable,
     NotConfigured,
 }
@@ -236,7 +241,9 @@ struct ProviderResponse {
 enum ProviderErrorKind {
     NotConfigured,
     PolicyDenied,
+    ZeroCostNotGuaranteed,
     RateLimited,
+    QuotaExhausted,
     Timeout,
     Unavailable,
     InvalidResponse,
@@ -261,7 +268,9 @@ impl ProviderError {
         match self.kind {
             ProviderErrorKind::NotConfigured => "AI_NOT_CONFIGURED",
             ProviderErrorKind::PolicyDenied => "AI_ZERO_COST_POLICY",
+            ProviderErrorKind::ZeroCostNotGuaranteed => "AI_ZERO_COST_NOT_GUARANTEED",
             ProviderErrorKind::RateLimited => "AI_RATE_LIMITED",
+            ProviderErrorKind::QuotaExhausted => "AI_QUOTA_EXHAUSTED",
             ProviderErrorKind::Timeout => "AI_TIMEOUT",
             ProviderErrorKind::Unavailable => "AI_PROVIDER_UNAVAILABLE",
             ProviderErrorKind::InvalidResponse => "AI_INVALID_RESPONSE",
@@ -553,6 +562,314 @@ impl AiProvider for GeminiProvider {
     }
 }
 
+struct MistralProvider {
+    model: String,
+    api_key: Option<String>,
+    policy: ZeroCostPolicy,
+    capabilities: Vec<String>,
+    client: Client,
+}
+
+impl MistralProvider {
+    fn new(
+        model: String,
+        api_key: Option<String>,
+        policy: ZeroCostPolicy,
+        capabilities: Vec<String>,
+        client: Client,
+    ) -> Self {
+        Self {
+            model,
+            api_key,
+            policy,
+            capabilities,
+            client,
+        }
+    }
+}
+
+impl AiProvider for MistralProvider {
+    fn health(&self) -> AiProviderHealth {
+        AiProviderHealth {
+            provider_id: PROVIDER_MISTRAL.to_string(),
+            model: self.model.clone(),
+            state: if self.api_key.is_none() {
+                AiProviderState::NotConfigured
+            } else if !self.policy.model_eligible || self.policy.capabilities.is_empty() {
+                AiProviderState::Unavailable
+            } else {
+                AiProviderState::Available
+            },
+            zero_cost_eligible: self.policy.model_eligible,
+            zero_cost_capabilities: self.policy.capabilities.clone(),
+            capabilities: self.capabilities.clone(),
+            detail: if self.api_key.is_none() {
+                Some("MISTRAL_API_KEY is not configured".to_string())
+            } else if !self.policy.model_eligible || self.policy.capabilities.is_empty() {
+                Some(
+                    "model or capability is not explicitly eligible for Mistral Free mode"
+                        .to_string(),
+                )
+            } else {
+                Some("Free mode eligibility is explicit; pay-as-you-go is denied".to_string())
+            },
+        }
+    }
+
+    fn complete(&self, request: &ProviderRequest) -> Result<ProviderResponse, ProviderError> {
+        let Some(api_key) = self.api_key.as_deref() else {
+            return Err(ProviderError::new(
+                ProviderErrorKind::NotConfigured,
+                "Mistral API key is not configured",
+            ));
+        };
+        if !self.policy.model_eligible || self.policy.capabilities.is_empty() {
+            return Err(ProviderError::new(
+                ProviderErrorKind::ZeroCostNotGuaranteed,
+                "Mistral model/capability is not eligible for Free mode",
+            ));
+        }
+        let system = format!(
+            "You are the NEX+ Curator research assistant. Return only JSON matching this schema: {}. Preserve uncertainty and never claim canonical authority.",
+            request.output_schema
+        );
+        let body = json!({
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": request.input_text}
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"}
+        });
+        let response = self
+            .client
+            .post("https://api.mistral.ai/v1/chat/completions")
+            .bearer_auth(api_key)
+            .json(&body)
+            .timeout(Duration::from_millis(request.timeout_ms))
+            .send()
+            .map_err(classify_reqwest_error)?;
+        let status = response.status();
+        let body: Value = response.json().map_err(|error| {
+            ProviderError::new(
+                ProviderErrorKind::InvalidResponse,
+                format!("Mistral response was not JSON: {error}"),
+            )
+        })?;
+        if !status.is_success() {
+            return Err(classify_mistral_error(status.as_u16(), &body));
+        }
+        let content = body
+            .pointer("/choices/0/message/content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ProviderError::new(
+                    ProviderErrorKind::InvalidResponse,
+                    "Mistral response did not contain message content",
+                )
+            })?;
+        let output = serde_json::from_str(content).map_err(|error| {
+            ProviderError::new(
+                ProviderErrorKind::InvalidResponse,
+                format!("Mistral content was not structured JSON: {error}"),
+            )
+        })?;
+        Ok(ProviderResponse {
+            output,
+            usage: body.get("usage").cloned(),
+            cost: Some(0.0),
+        })
+    }
+}
+
+struct HuggingFaceProvider {
+    model: String,
+    token: Option<String>,
+    policy: ZeroCostPolicy,
+    capabilities: Vec<String>,
+    remaining_budget_usd: Option<Mutex<f64>>,
+    max_call_cost_usd: Option<f64>,
+    client: Client,
+}
+
+impl HuggingFaceProvider {
+    fn new(
+        model: String,
+        token: Option<String>,
+        policy: ZeroCostPolicy,
+        capabilities: Vec<String>,
+        remaining_budget_usd: Option<f64>,
+        max_call_cost_usd: Option<f64>,
+        client: Client,
+    ) -> Self {
+        Self {
+            model,
+            token,
+            policy,
+            capabilities,
+            remaining_budget_usd: remaining_budget_usd.map(Mutex::new),
+            max_call_cost_usd,
+            client,
+        }
+    }
+
+    fn budget_guaranteed(&self) -> bool {
+        self.remaining_budget_usd.is_some()
+            && self
+                .max_call_cost_usd
+                .is_some_and(|cost| cost.is_finite() && cost > 0.0)
+    }
+
+    fn available_budget(&self) -> Option<f64> {
+        self.remaining_budget_usd
+            .as_ref()
+            .and_then(|budget| budget.lock().ok().map(|value| *value))
+    }
+
+    fn reserve_call(&self) -> Result<(), ProviderError> {
+        if !self.policy.model_eligible
+            || self.policy.capabilities.is_empty()
+            || !self.budget_guaranteed()
+        {
+            return Err(ProviderError::new(
+                ProviderErrorKind::ZeroCostNotGuaranteed,
+                "Hugging Face free budget/model/capability guarantee is incomplete",
+            ));
+        }
+        let max_call_cost = self.max_call_cost_usd.unwrap_or_default();
+        let Some(budget) = self.remaining_budget_usd.as_ref() else {
+            return Err(ProviderError::new(
+                ProviderErrorKind::ZeroCostNotGuaranteed,
+                "Hugging Face free budget is not configured",
+            ));
+        };
+        let mut remaining = budget.lock().map_err(|_| {
+            ProviderError::new(
+                ProviderErrorKind::ZeroCostNotGuaranteed,
+                "Hugging Face free budget state is unavailable",
+            )
+        })?;
+        if !remaining.is_finite() || *remaining < max_call_cost {
+            return Err(ProviderError::new(
+                ProviderErrorKind::QuotaExhausted,
+                "Hugging Face free budget cannot guarantee this call",
+            ));
+        }
+        *remaining -= max_call_cost;
+        Ok(())
+    }
+}
+
+impl AiProvider for HuggingFaceProvider {
+    fn health(&self) -> AiProviderHealth {
+        let state = if self.token.is_none() {
+            AiProviderState::NotConfigured
+        } else if !self.policy.model_eligible
+            || self.policy.capabilities.is_empty()
+            || !self.budget_guaranteed()
+        {
+            AiProviderState::ZeroCostNotGuaranteed
+        } else if self
+            .available_budget()
+            .is_none_or(|remaining| remaining < self.max_call_cost_usd.unwrap_or_default())
+        {
+            AiProviderState::QuotaExhausted
+        } else {
+            AiProviderState::Available
+        };
+        let detail = match state {
+            AiProviderState::NotConfigured => {
+                Some("HUGGINGFACE_API_TOKEN is not configured".to_string())
+            }
+            AiProviderState::ZeroCostNotGuaranteed => Some(
+                "HF route requires explicit model/capability and remaining free-budget bounds"
+                    .to_string(),
+            ),
+            AiProviderState::QuotaExhausted => {
+                Some("configured free budget is exhausted or below the call bound".to_string())
+            }
+            _ => Some(
+                "HF routed inference is enabled only within the configured free-credit bound"
+                    .to_string(),
+            ),
+        };
+        AiProviderHealth {
+            provider_id: PROVIDER_HUGGING_FACE.to_string(),
+            model: self.model.clone(),
+            state,
+            zero_cost_eligible: self.policy.model_eligible && self.budget_guaranteed(),
+            zero_cost_capabilities: self.policy.capabilities.clone(),
+            capabilities: self.capabilities.clone(),
+            detail,
+        }
+    }
+
+    fn complete(&self, request: &ProviderRequest) -> Result<ProviderResponse, ProviderError> {
+        let Some(token) = self.token.as_deref() else {
+            return Err(ProviderError::new(
+                ProviderErrorKind::NotConfigured,
+                "Hugging Face token is not configured",
+            ));
+        };
+        self.reserve_call()?;
+        let body = json!({
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": "You are the NEX+ Curator research assistant. Return only the requested JSON, preserve uncertainty, and never claim canonical authority."},
+                {"role": "user", "content": format!("Return JSON matching this schema: {}\\n\\n{}", request.output_schema, request.input_text)}
+            ],
+            "temperature": 0.1,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "nex_curator_result",
+                    "strict": true,
+                    "schema": request.output_schema
+                }
+            }
+        });
+        let response = self
+            .client
+            .post("https://router.huggingface.co/v1/chat/completions")
+            .bearer_auth(token)
+            .json(&body)
+            .timeout(Duration::from_millis(request.timeout_ms))
+            .send()
+            .map_err(classify_reqwest_error)?;
+        let status = response.status();
+        let body: Value = response.json().map_err(|error| {
+            ProviderError::new(
+                ProviderErrorKind::InvalidResponse,
+                format!("Hugging Face response was not JSON: {error}"),
+            )
+        })?;
+        if !status.is_success() {
+            return Err(classify_hugging_face_error(status.as_u16(), &body));
+        }
+        let content = body
+            .pointer("/choices/0/message/content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ProviderError::new(
+                    ProviderErrorKind::InvalidResponse,
+                    "Hugging Face response did not contain message content",
+                )
+            })?;
+        let output = serde_json::from_str(content).map_err(|error| {
+            ProviderError::new(
+                ProviderErrorKind::InvalidResponse,
+                format!("Hugging Face content was not structured JSON: {error}"),
+            )
+        })?;
+        Ok(ProviderResponse {
+            output,
+            usage: body.get("usage").cloned(),
+            cost: Some(0.0),
+        })
+    }
+}
+
 struct CloudflareWorkersAiProvider {
     account_id: Option<String>,
     api_token: Option<String>,
@@ -700,6 +1017,53 @@ fn classify_reqwest_error(error: reqwest::Error) -> ProviderError {
     }
 }
 
+fn classify_mistral_error(status: u16, body: &Value) -> ProviderError {
+    let detail = body.to_string().to_lowercase();
+    if status == 402 || (status == 403 && detail.contains("pay")) {
+        return ProviderError::new(
+            ProviderErrorKind::PolicyDenied,
+            "Mistral response indicates paid usage and was rejected",
+        );
+    }
+    if status == 429
+        && ["month", "quota", "credit", "limit"]
+            .iter()
+            .any(|term| detail.contains(term))
+    {
+        return ProviderError::new(
+            ProviderErrorKind::QuotaExhausted,
+            "Mistral Free mode quota is exhausted",
+        );
+    }
+    classify_http_status(status)
+}
+
+fn classify_hugging_face_error(status: u16, body: &Value) -> ProviderError {
+    let detail = body.to_string().to_lowercase();
+    if status == 402
+        || (status == 403
+            && ["billing", "payment", "paid", "credit"]
+                .iter()
+                .any(|term| detail.contains(term)))
+    {
+        return ProviderError::new(
+            ProviderErrorKind::ZeroCostNotGuaranteed,
+            "Hugging Face response cannot guarantee zero-cost usage",
+        );
+    }
+    if status == 429
+        || ["quota", "credit", "monthly", "rate limit"]
+            .iter()
+            .any(|term| detail.contains(term))
+    {
+        return ProviderError::new(
+            ProviderErrorKind::QuotaExhausted,
+            "Hugging Face free credit/quota is exhausted",
+        );
+    }
+    classify_http_status(status)
+}
+
 fn env_value(name: &str) -> Option<String> {
     std::env::var(name)
         .ok()
@@ -838,6 +1202,36 @@ impl AiRouter {
             cloudflare_model.clone(),
             cloudflare_zero_cost_policy(&cloudflare_model),
             text_capabilities.clone(),
+            client.clone(),
+        )));
+
+        let mistral_model = env_or("MISTRAL_MODEL", "unset");
+        providers.push(Box::new(MistralProvider::new(
+            mistral_model.clone(),
+            env_value("MISTRAL_API_KEY"),
+            zero_cost_policy("MISTRAL", &mistral_model),
+            text_capabilities.clone(),
+            client.clone(),
+        )));
+
+        let hugging_face_model = env_or("HUGGINGFACE_MODEL", "unset");
+        let hugging_face_policy = zero_cost_policy("HUGGINGFACE", &hugging_face_model);
+        let hugging_face_provider = env_value("HUGGINGFACE_INFERENCE_PROVIDER")
+            .map(|provider| format!("{hugging_face_model}:{provider}"))
+            .unwrap_or_else(|| hugging_face_model.clone());
+        let hugging_face_remaining = env_value("HUGGINGFACE_FREE_BUDGET_USD")
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|value| value.is_finite() && *value >= 0.0);
+        let hugging_face_max_call = env_value("HUGGINGFACE_MAX_CALL_COST_USD")
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|value| value.is_finite() && *value > 0.0);
+        providers.push(Box::new(HuggingFaceProvider::new(
+            hugging_face_provider,
+            env_value("HUGGINGFACE_API_TOKEN"),
+            hugging_face_policy,
+            text_capabilities.clone(),
+            hugging_face_remaining,
+            hugging_face_max_call,
             client.clone(),
         )));
 
@@ -1145,6 +1539,8 @@ impl AiRouter {
                     })?;
                     let runtime_state = match error_code {
                         "AI_RATE_LIMITED" => AiProviderState::RateLimited,
+                        "AI_QUOTA_EXHAUSTED" => AiProviderState::QuotaExhausted,
+                        "AI_ZERO_COST_NOT_GUARANTEED" => AiProviderState::ZeroCostNotGuaranteed,
                         "AI_TIMEOUT" | "AI_PROVIDER_UNAVAILABLE" | "AI_ZERO_COST_POLICY" => {
                             AiProviderState::Unavailable
                         }
@@ -1182,10 +1578,25 @@ impl AiRouter {
                 "no configured provider matched this policy".to_string(),
             ));
         }
-        if last_error_code == Some("AI_ZERO_COST_POLICY") {
-            return Err(CoreError::AiZeroCostPolicy(last_error.unwrap_or_else(
-                || "provider was blocked by the ZERO cost policy".to_string(),
-            )));
+        match last_error_code {
+            Some("AI_ZERO_COST_POLICY") => {
+                return Err(CoreError::AiZeroCostPolicy(last_error.unwrap_or_else(
+                    || "provider was blocked by the ZERO cost policy".to_string(),
+                )));
+            }
+            Some("AI_ZERO_COST_NOT_GUARANTEED") => {
+                return Err(CoreError::AiZeroCostNotGuaranteed(
+                    last_error.unwrap_or_else(|| {
+                        "provider could not guarantee zero-cost usage".to_string()
+                    }),
+                ));
+            }
+            Some("AI_QUOTA_EXHAUSTED") => {
+                return Err(CoreError::AiQuotaExhausted(
+                    last_error.unwrap_or_else(|| "provider quota is exhausted".to_string()),
+                ));
+            }
+            _ => {}
         }
         Err(CoreError::AiProvider {
             provider: "router".to_string(),
@@ -1205,24 +1616,32 @@ impl AiRouter {
                 PROVIDER_GEMINI,
                 PROVIDER_GROQ,
                 PROVIDER_CLOUDFLARE_WORKERS_AI,
+                PROVIDER_MISTRAL,
+                PROVIDER_HUGGING_FACE,
                 PROVIDER_LOCAL,
             ],
             CAPABILITY_TRANSLATION_PT_BR => vec![
                 PROVIDER_GEMINI,
                 PROVIDER_GROQ,
                 PROVIDER_CLOUDFLARE_WORKERS_AI,
+                PROVIDER_MISTRAL,
+                PROVIDER_HUGGING_FACE,
                 PROVIDER_LOCAL,
             ],
             CAPABILITY_STRUCTURED_EXTRACTION => vec![
                 PROVIDER_GEMINI,
                 PROVIDER_GROQ,
                 PROVIDER_CLOUDFLARE_WORKERS_AI,
+                PROVIDER_MISTRAL,
+                PROVIDER_HUGGING_FACE,
                 PROVIDER_LOCAL,
             ],
             _ => vec![
                 PROVIDER_GEMINI,
                 PROVIDER_GROQ,
                 PROVIDER_CLOUDFLARE_WORKERS_AI,
+                PROVIDER_MISTRAL,
+                PROVIDER_HUGGING_FACE,
                 PROVIDER_LOCAL,
             ],
         }
@@ -1364,9 +1783,10 @@ mod tests {
     use super::{
         cloudflare_model_requires_paid, zero_cost_policy_from_values, AiProvider, AiProviderHealth,
         AiProviderState, AiRouter, AiTargetRef, AiTaskRequest, CloudflareWorkersAiProvider,
-        CuratorProposalDecisionRequest, ProviderError, ProviderErrorKind, ProviderRequest,
-        ProviderResponse, ZeroCostPolicy, CAPABILITY_LOCAL_ONLY, CAPABILITY_STRUCTURED_EXTRACTION,
-        PROVIDER_CLOUDFLARE_WORKERS_AI, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_LOCAL,
+        CuratorProposalDecisionRequest, HuggingFaceProvider, MistralProvider, ProviderError,
+        ProviderErrorKind, ProviderRequest, ProviderResponse, ZeroCostPolicy,
+        CAPABILITY_LOCAL_ONLY, CAPABILITY_STRUCTURED_EXTRACTION, PROVIDER_CLOUDFLARE_WORKERS_AI,
+        PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_HUGGING_FACE, PROVIDER_LOCAL, PROVIDER_MISTRAL,
     };
     use crate::core::db::CatalogDb;
     use crate::core::pack::{PackRuntime, BUNDLED_PACK_ID};
@@ -1430,7 +1850,7 @@ mod tests {
             evidence_urls: vec!["https://milanofashionweek.cameramoda.it/en/".to_string()],
             local_only,
             provider_order: if local_only {
-                vec!["local".to_string()]
+                vec![PROVIDER_LOCAL.to_string()]
             } else {
                 vec!["primary".to_string(), "fallback".to_string()]
             },
@@ -1461,10 +1881,14 @@ mod tests {
             .map(|provider| provider.provider_id.as_str())
             .collect::<Vec<_>>();
         assert_eq!(report.allowed_cost, "ZERO");
+        assert_eq!(ids.len(), 6);
         assert!(ids.contains(&PROVIDER_GEMINI));
         assert!(ids.contains(&PROVIDER_GROQ));
         assert!(ids.contains(&PROVIDER_CLOUDFLARE_WORKERS_AI));
+        assert!(ids.contains(&PROVIDER_MISTRAL));
+        assert!(ids.contains(&PROVIDER_HUGGING_FACE));
         assert!(ids.contains(&PROVIDER_LOCAL));
+        assert_eq!(ids.iter().filter(|id| **id != PROVIDER_LOCAL).count(), 5);
         assert!(!ids.contains(&"xai"));
         assert!(!ids.contains(&"openrouter"));
     }
@@ -1503,6 +1927,8 @@ mod tests {
             PROVIDER_GEMINI,
             PROVIDER_GROQ,
             PROVIDER_CLOUDFLARE_WORKERS_AI,
+            PROVIDER_MISTRAL,
+            PROVIDER_HUGGING_FACE,
         ] {
             let router =
                 AiRouter::with_providers(vec![free_provider(provider_id, Ok(review_output()))]);
@@ -1514,6 +1940,126 @@ mod tests {
             assert_eq!(result.execution.provider_id, provider_id);
             assert_eq!(result.execution.cost, Some(0.0));
         }
+    }
+
+    #[test]
+    fn mistral_adapter_is_real_and_paid_mode_is_unavailable() {
+        let free = MistralProvider::new(
+            "mistral-free-model".to_string(),
+            Some("test-key".to_string()),
+            ZeroCostPolicy {
+                model_eligible: true,
+                capabilities: vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            },
+            vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            reqwest::blocking::Client::new(),
+        );
+        assert_eq!(free.health().state, AiProviderState::Available);
+
+        let paid = MistralProvider::new(
+            "mistral-paid-model".to_string(),
+            Some("test-key".to_string()),
+            ZeroCostPolicy {
+                model_eligible: false,
+                capabilities: vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            },
+            vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            reqwest::blocking::Client::new(),
+        );
+        assert_eq!(paid.health().state, AiProviderState::Unavailable);
+    }
+
+    #[test]
+    fn mistral_quota_exhaustion_falls_back_to_local() {
+        let router = AiRouter::with_providers(vec![
+            free_provider(
+                PROVIDER_MISTRAL,
+                Err(ProviderError::new(
+                    ProviderErrorKind::QuotaExhausted,
+                    "Mistral Free quota exhausted",
+                )),
+            ),
+            free_provider(PROVIDER_LOCAL, Ok(review_output())),
+        ]);
+        let mut database = CatalogDb::in_memory().unwrap();
+        database.seed_bundled_milano().unwrap();
+        let mut task = request(false);
+        task.provider_order = vec![PROVIDER_MISTRAL.to_string(), PROVIDER_LOCAL.to_string()];
+        let result = router.run(&mut database, task).unwrap();
+        assert_eq!(result.execution.provider_id, PROVIDER_LOCAL);
+        assert_eq!(
+            router.health().providers[0].state,
+            AiProviderState::QuotaExhausted
+        );
+    }
+
+    #[test]
+    fn hugging_face_requires_a_bounded_free_budget_before_any_call() {
+        let free = HuggingFaceProvider::new(
+            "model:provider".to_string(),
+            Some("test-token".to_string()),
+            ZeroCostPolicy {
+                model_eligible: true,
+                capabilities: vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            },
+            vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            Some(0.10),
+            Some(0.01),
+            reqwest::blocking::Client::new(),
+        );
+        assert_eq!(free.health().state, AiProviderState::Available);
+
+        let unknown = HuggingFaceProvider::new(
+            "model:provider".to_string(),
+            Some("test-token".to_string()),
+            ZeroCostPolicy {
+                model_eligible: true,
+                capabilities: vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            },
+            vec![CAPABILITY_STRUCTURED_EXTRACTION.to_string()],
+            None,
+            Some(0.01),
+            reqwest::blocking::Client::new(),
+        );
+        assert_eq!(
+            unknown.health().state,
+            AiProviderState::ZeroCostNotGuaranteed
+        );
+        let error = unknown.complete(&ProviderRequest {
+            input_text: "test".to_string(),
+            output_schema: json!({"type": "object"}),
+            timeout_ms: 1_000,
+        });
+        assert!(matches!(
+            error,
+            Err(ProviderError {
+                kind: ProviderErrorKind::ZeroCostNotGuaranteed,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn hugging_face_quota_exhaustion_falls_back_to_local() {
+        let router = AiRouter::with_providers(vec![
+            free_provider(
+                PROVIDER_HUGGING_FACE,
+                Err(ProviderError::new(
+                    ProviderErrorKind::QuotaExhausted,
+                    "HF free credit exhausted",
+                )),
+            ),
+            free_provider(PROVIDER_LOCAL, Ok(review_output())),
+        ]);
+        let mut database = CatalogDb::in_memory().unwrap();
+        database.seed_bundled_milano().unwrap();
+        let mut task = request(false);
+        task.provider_order = vec![
+            PROVIDER_HUGGING_FACE.to_string(),
+            PROVIDER_LOCAL.to_string(),
+        ];
+        let result = router.run(&mut database, task).unwrap();
+        assert_eq!(result.execution.provider_id, PROVIDER_LOCAL);
     }
 
     #[test]

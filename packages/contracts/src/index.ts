@@ -57,6 +57,8 @@ export type IpcErrorCode =
   | "AI_NOT_CONFIGURED"
   | "AI_PROVIDER_ERROR"
   | "AI_ZERO_COST_POLICY"
+  | "AI_ZERO_COST_NOT_GUARANTEED"
+  | "AI_QUOTA_EXHAUSTED"
   | "AI_VALIDATION_FAILED"
   | "AI_POLICY_ERROR";
 
@@ -74,13 +76,17 @@ export const AI_PROVIDERS = {
   gemini: "gemini",
   groq: "groq",
   cloudflareWorkersAi: "cloudflare_workers_ai",
-  local: "local",
+  mistral: "mistral",
+  huggingFace: "hugging_face",
+  localLlamaCpp: "local_llama_cpp",
 } as const;
 
 export type AiProviderState =
   | "AVAILABLE"
   | "DEGRADED"
   | "RATE_LIMITED"
+  | "QUOTA_EXHAUSTED"
+  | "ZERO_COST_NOT_GUARANTEED"
   | "UNAVAILABLE"
   | "NOT_CONFIGURED";
 
