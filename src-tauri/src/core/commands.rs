@@ -1,3 +1,7 @@
+use crate::core::ai::{
+    AiExecutionRead, AiHealthReport, AiRunResult, AiTaskRequest, CuratorProposalDecisionRequest,
+    CuratorProposalRead,
+};
 use crate::core::error::CoreError;
 use crate::core::read::{PageRequest, ReadPage, ReadState, READ_CONTRACT_VERSION};
 use crate::core::state::CoreState;
@@ -42,6 +46,60 @@ pub fn core_migrations(state: State<'_, CoreState>) -> Result<Vec<String>, CoreE
         .lock()
         .map_err(|_| CoreError::StatePoisoned)?;
     database.migration_names()
+}
+
+#[tauri::command]
+pub fn ai_health(state: State<'_, CoreState>) -> AiHealthReport {
+    state.ai.health()
+}
+
+#[tauri::command]
+pub fn ai_executions(
+    state: State<'_, CoreState>,
+    limit: Option<u32>,
+) -> Result<Vec<AiExecutionRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.ai_executions(limit.unwrap_or(50))
+}
+
+#[tauri::command]
+pub fn curator_ai_run(
+    state: State<'_, CoreState>,
+    request: AiTaskRequest,
+) -> Result<AiRunResult, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    state.ai.run(&mut database, request)
+}
+
+#[tauri::command]
+pub fn curator_proposals(
+    state: State<'_, CoreState>,
+    proposal_state: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<CuratorProposalRead>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.curator_proposals(proposal_state.as_deref(), limit.unwrap_or(50))
+}
+
+#[tauri::command]
+pub fn curator_proposal_decide(
+    state: State<'_, CoreState>,
+    request: CuratorProposalDecisionRequest,
+) -> Result<CuratorProposalRead, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.decide_curator_proposal(&request)
 }
 
 #[tauri::command]

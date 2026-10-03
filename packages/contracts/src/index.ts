@@ -6,6 +6,7 @@ export const BASELINE_MIGRATIONS = [
   "0003_milano_vertical",
   "0004_pack_runtime",
   "0005_personal_favorite",
+  "0006_ai_curator",
 ] as const;
 
 export const MILANO_SS27_PACK_ID = "nex.fashion.milano.ss27" as const;
@@ -52,7 +53,11 @@ export type IpcErrorCode =
   | "PACK_REMOVED"
   | "INVALID_REQUEST"
   | "PACK_ERROR"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  | "AI_NOT_CONFIGURED"
+  | "AI_PROVIDER_ERROR"
+  | "AI_VALIDATION_FAILED"
+  | "AI_POLICY_ERROR";
 
 export interface IpcResponse<T> {
   ok: boolean;
@@ -61,6 +66,143 @@ export interface IpcResponse<T> {
 }
 
 export const READ_CONTRACT_VERSION = "1.0" as const;
+export const AI_CONTRACT_VERSION = "1.0" as const;
+
+export type AiProviderState =
+  | "AVAILABLE"
+  | "DEGRADED"
+  | "RATE_LIMITED"
+  | "UNAVAILABLE"
+  | "NOT_CONFIGURED";
+
+export interface AiProviderHealth {
+  providerId: string;
+  model: string;
+  state: AiProviderState;
+  capabilities: string[];
+  detail?: string;
+}
+
+export interface AiHealthReport {
+  contractVersion: typeof AI_CONTRACT_VERSION;
+  routerState: AiProviderState;
+  providers: AiProviderHealth[];
+  capabilities: string[];
+  fullyOperational: boolean;
+  offlineSafe: boolean;
+}
+
+export interface AiTargetRef {
+  entityType: string;
+  entityId: string;
+}
+
+export interface AiTaskRequest {
+  taskType: string;
+  capability: string;
+  inputText: string;
+  target?: AiTargetRef;
+  sourceIds?: string[];
+  evidenceUrls?: string[];
+  localOnly?: boolean;
+  providerOrder?: string[];
+  maxAttempts?: number;
+  timeoutMs?: number;
+  outputSchema?: unknown;
+}
+
+export interface AiExecution {
+  executionId: string;
+  taskType: string;
+  providerId: string;
+  model: string;
+  capability: string;
+  startedAt: string;
+  completedAt?: string;
+  latencyMs?: number;
+  attempt: number;
+  fallbackStep: number;
+  status: "succeeded" | "failed" | "skipped" | "degraded";
+  validatorSchema: string;
+  validationResult: unknown;
+  errorCode?: string;
+  errorMessage?: string;
+  inputHash: string;
+  usage?: unknown;
+  cost?: number;
+  candidateId?: string;
+}
+
+export interface AiCandidate {
+  candidateId: string;
+  proposalKind: string;
+  target?: AiTargetRef;
+  proposed: unknown;
+  evidence: unknown[];
+  provenance: unknown[];
+  rationale?: string;
+  confidence?: number;
+  executionId: string;
+  status: "open" | "converted" | "rejected" | "superseded";
+}
+
+export type CuratorProposalState =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "needs_more_evidence"
+  | "edited_approved";
+
+export interface CuratorProposal {
+  proposalId: string;
+  candidateId: string;
+  proposalKind: string;
+  state: CuratorProposalState;
+  target?: AiTargetRef;
+  proposed: unknown;
+  edited?: unknown;
+  before?: unknown;
+  approved?: unknown;
+  evidence: unknown[];
+  provenance: unknown[];
+  rationale?: string;
+  confidence?: number;
+  reviewer?: string;
+  decisionReason?: string;
+  decidedAt?: string;
+  officialApplied: boolean;
+}
+
+export type CuratorProposalDecision =
+  | "APPROVE"
+  | "EDIT_APPROVE"
+  | "REJECT"
+  | "NEEDS_MORE_EVIDENCE";
+
+export interface CuratorProposalDecisionRequest {
+  proposalId: string;
+  decision: CuratorProposalDecision;
+  reviewer: string;
+  edited?: unknown;
+  reason?: string;
+}
+
+export interface AiRunResult {
+  execution: AiExecution;
+  candidate: AiCandidate;
+  proposal: CuratorProposal;
+}
+
+export const AI_CAPABILITIES = {
+  structuredExtraction: "STRUCTURED_EXTRACTION",
+  summarization: "SUMMARIZATION",
+  translationPtBr: "TRANSLATION_PT_BR",
+  entityMatching: "ENTITY_MATCHING",
+  tagSuggestion: "TAG_SUGGESTION",
+  validationAssist: "VALIDATION_ASSIST",
+  visionAnalysis: "VISION_ANALYSIS",
+  localOnly: "LOCAL_ONLY",
+} as const;
 
 export type ReadState =
   | "available"

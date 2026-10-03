@@ -26,6 +26,14 @@ pub enum CoreError {
     PackRemoved(String),
     #[error("invalid request: {0}")]
     InvalidRequest(String),
+    #[error("AI provider is not configured: {0}")]
+    AiNotConfigured(String),
+    #[error("AI provider error ({provider}): {message}")]
+    AiProvider { provider: String, message: String },
+    #[error("AI output validation failed: {0}")]
+    AiValidation(String),
+    #[error("AI policy error: {0}")]
+    AiPolicy(String),
     #[error("core state lock is poisoned")]
     StatePoisoned,
 }
@@ -51,6 +59,10 @@ impl CoreError {
             Self::PackNotInstalled(_) | Self::PackNotFound(_) => "PACK_NOT_INSTALLED",
             Self::PackRemoved(_) => "PACK_REMOVED",
             Self::InvalidRequest(_) => "INVALID_REQUEST",
+            Self::AiNotConfigured(_) => "AI_NOT_CONFIGURED",
+            Self::AiProvider { .. } => "AI_PROVIDER_ERROR",
+            Self::AiValidation(_) => "AI_VALIDATION_FAILED",
+            Self::AiPolicy(_) => "AI_POLICY_ERROR",
             Self::Pack(_) => "PACK_ERROR",
             Self::Database(_)
             | Self::Io(_)

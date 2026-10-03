@@ -20,6 +20,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             core::commands::core_health,
             core::commands::core_migrations,
+            core::commands::ai_health,
+            core::commands::ai_executions,
+            core::commands::curator_ai_run,
+            core::commands::curator_proposals,
+            core::commands::curator_proposal_decide,
             core::commands::catalog_milano_ss27,
             core::commands::catalog_search,
             core::commands::personal_note_upsert,

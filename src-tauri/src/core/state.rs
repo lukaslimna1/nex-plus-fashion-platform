@@ -1,3 +1,4 @@
+use crate::core::ai::AiRouter;
 use crate::core::db::CatalogDb;
 use crate::core::error::CoreError;
 use crate::core::pack::PackRuntime;
@@ -6,6 +7,7 @@ use std::sync::Mutex;
 pub struct CoreState {
     pub database: Mutex<CatalogDb>,
     pub packs: PackRuntime,
+    pub ai: AiRouter,
 }
 
 impl CoreState {
@@ -21,6 +23,7 @@ impl CoreState {
         Ok(Self {
             database: Mutex::new(database),
             packs,
+            ai: AiRouter::from_env(),
         })
     }
 }

@@ -1,3 +1,7 @@
+use crate::core::ai::{
+    AiCandidateRead, AiCandidateRecord, AiExecutionRead, AiExecutionRecord, AiRunResult,
+    AiTargetRef, CuratorProposalDecisionRequest, CuratorProposalRead, CuratorProposalRecord,
+};
 use crate::core::error::CoreError;
 use crate::core::milano::{bundled_pack, MilanoSeed, NexPack};
 use crate::core::read::{
@@ -9,9 +13,10 @@ use crate::core::read::{
 };
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
+use serde_json::Value;
 use std::path::Path;
 
-const MIGRATIONS: [(&str, &str); 5] = [
+const MIGRATIONS: [(&str, &str); 6] = [
     ("0001_core", include_str!("../../migrations/0001_core.sql")),
     ("0002_fts5", include_str!("../../migrations/0002_fts5.sql")),
     (
@@ -25,6 +30,10 @@ const MIGRATIONS: [(&str, &str); 5] = [
     (
         "0005_personal_favorite",
         include_str!("../../migrations/0005_personal_favorite.sql"),
+    ),
+    (
+        "0006_ai_curator",
+        include_str!("../../migrations/0006_ai_curator.sql"),
     ),
 ];
 
@@ -220,6 +229,219 @@ impl CatalogDb {
             )
             .optional()?;
         Ok(exists.is_some())
+    }
+
+    pub fn current_timestamp(&self) -> Result<String, CoreError> {
+        self.connection
+            .query_row("SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')", [], |row| {
+                row.get(0)
+            })
+            .map_err(CoreError::from)
+    }
+
+    pub fn persist_ai_success(
+        &mut self,
+        execution: &AiExecutionRecord,
+        candidate: &AiCandidateRecord,
+        proposal: &CuratorProposalRecord,
+    ) -> Result<AiRunResult, CoreError> {
+        let transaction = self.connection.transaction()?;
+        insert_ai_execution(&transaction, execution)?;
+        insert_ai_candidate(&transaction, candidate)?;
+        insert_curator_proposal(&transaction, proposal)?;
+        transaction.commit()?;
+        Ok(AiRunResult {
+            execution: execution_read(execution),
+            candidate: candidate_read(candidate),
+            proposal: proposal_read(proposal),
+        })
+    }
+
+    pub fn persist_ai_failure(
+        &mut self,
+        execution: &AiExecutionRecord,
+    ) -> Result<AiExecutionRead, CoreError> {
+        let transaction = self.connection.transaction()?;
+        insert_ai_execution(&transaction, execution)?;
+        transaction.commit()?;
+        Ok(execution_read(execution))
+    }
+
+    pub fn ai_executions(&self, limit: u32) -> Result<Vec<AiExecutionRead>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT execution_id, task_type, provider_id, model, capability, started_at,
+                    completed_at, latency_ms, attempt, fallback_step, status, validator_schema,
+                    validation_result_json, error_code, error_message, input_hash, usage_json,
+                    cost_amount, candidate_id
+             FROM ai_execution
+             ORDER BY created_at DESC, execution_id DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement
+            .query_map([i64::from(limit.clamp(1, 200))], |row| {
+                read_ai_execution_row(row)
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn curator_proposals(
+        &self,
+        state: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<CuratorProposalRead>, CoreError> {
+        let state = state.unwrap_or("");
+        let mut statement = self.connection.prepare(
+            "SELECT p.proposal_id, p.candidate_id, p.proposal_kind, p.state,
+                    c.target_entity_type, c.target_entity_id, p.proposed_json, p.edited_json,
+                    p.before_json, p.approved_json, p.evidence_json, p.provenance_json,
+                    p.rationale, p.confidence, p.reviewer, p.decision_reason, p.decided_at,
+                    p.official_applied
+             FROM curator_proposal p
+             JOIN ai_candidate c ON c.candidate_id=p.candidate_id
+             WHERE (?1='' OR p.state=?1)
+             ORDER BY p.created_at DESC, p.proposal_id DESC
+             LIMIT ?2",
+        )?;
+        let rows = statement
+            .query_map(params![state, i64::from(limit.clamp(1, 200))], |row| {
+                read_curator_proposal_row(row)
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn decide_curator_proposal(
+        &mut self,
+        request: &CuratorProposalDecisionRequest,
+    ) -> Result<CuratorProposalRead, CoreError> {
+        if request.reviewer.trim().is_empty() {
+            return Err(CoreError::InvalidRequest(
+                "reviewer is required for a curator decision".to_string(),
+            ));
+        }
+        let decision = request.decision.trim().to_ascii_uppercase();
+        let (state, needs_edited) = match decision.as_str() {
+            "APPROVE" => ("approved", false),
+            "EDIT_APPROVE" | "EDIT_AND_APPROVE" => ("edited_approved", true),
+            "REJECT" => ("rejected", false),
+            "NEEDS_MORE_EVIDENCE" | "REQUEST_MORE_EVIDENCE" => ("needs_more_evidence", false),
+            _ => {
+                return Err(CoreError::InvalidRequest(
+                    "decision must be APPROVE, EDIT_APPROVE, REJECT or NEEDS_MORE_EVIDENCE"
+                        .to_string(),
+                ))
+            }
+        };
+        if needs_edited && request.edited.is_none() {
+            return Err(CoreError::InvalidRequest(
+                "edited payload is required for EDIT_APPROVE".to_string(),
+            ));
+        }
+
+        let transaction = self.connection.transaction()?;
+        let proposal = transaction
+            .query_row(
+                "SELECT p.proposal_id, p.candidate_id, p.proposal_kind, p.state,
+                        c.target_entity_type, c.target_entity_id, p.proposed_json,
+                        p.edited_json, p.before_json, p.approved_json, p.evidence_json,
+                        p.provenance_json, p.rationale, p.confidence, p.reviewer,
+                        p.decision_reason, p.decided_at, p.official_applied
+                 FROM curator_proposal p
+                 JOIN ai_candidate c ON c.candidate_id=p.candidate_id
+                 WHERE p.proposal_id=?1",
+                [&request.proposal_id],
+                |row| read_curator_proposal_row(row),
+            )
+            .optional()?
+            .ok_or_else(|| CoreError::NotFound {
+                resource: "curator_proposal".to_string(),
+                id: request.proposal_id.clone(),
+            })?;
+        if proposal.state != "pending" {
+            return Err(CoreError::InvalidRequest(format!(
+                "proposal is already {}",
+                proposal.state
+            )));
+        }
+
+        let selected = request
+            .edited
+            .clone()
+            .unwrap_or_else(|| proposal.proposed.clone());
+        let mut before = proposal.before.clone();
+        let mut approved = None;
+        let mut official_applied = false;
+        if state == "approved" || state == "edited_approved" {
+            let applied = apply_official_promotion(
+                &transaction,
+                &proposal.proposal_kind,
+                &proposal.target,
+                &selected,
+            )?;
+            before = applied.0.or(before);
+            official_applied = applied.1;
+            approved = Some(selected.clone());
+        }
+        let now: String =
+            transaction.query_row("SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')", [], |row| {
+                row.get(0)
+            })?;
+        transaction.execute(
+            "UPDATE curator_proposal
+             SET state=?1, edited_json=?2, before_json=?3, approved_json=?4,
+                 reviewer=?5, decision_reason=?6, decided_at=?7,
+                 official_applied=?8, updated_at=?7
+             WHERE proposal_id=?9",
+            params![
+                state,
+                request
+                    .edited
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()
+                    .map_err(CoreError::from)?,
+                before
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()
+                    .map_err(CoreError::from)?,
+                approved
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()
+                    .map_err(CoreError::from)?,
+                request.reviewer,
+                request.reason,
+                now,
+                i32::from(official_applied),
+                request.proposal_id,
+            ],
+        )?;
+        transaction.execute(
+            "UPDATE ai_candidate SET status=?1, updated_at=?2 WHERE candidate_id=?3",
+            params![
+                if official_applied || state == "rejected" {
+                    if official_applied {
+                        "converted"
+                    } else {
+                        "rejected"
+                    }
+                } else {
+                    "open"
+                },
+                now,
+                proposal.candidate_id,
+            ],
+        )?;
+        transaction.commit()?;
+        self.curator_proposals(None, 200)?
+            .into_iter()
+            .find(|item| item.proposal_id == request.proposal_id)
+            .ok_or_else(|| CoreError::NotFound {
+                resource: "curator_proposal".to_string(),
+                id: request.proposal_id.clone(),
+            })
     }
 
     pub fn read_state_for_pack(&self, pack_id: &str) -> Result<ReadState, CoreError> {
@@ -2764,6 +2986,352 @@ fn register_pack_entity(
     Ok(())
 }
 
+fn insert_ai_execution(
+    transaction: &Transaction<'_>,
+    record: &AiExecutionRecord,
+) -> Result<(), CoreError> {
+    transaction.execute(
+        "INSERT INTO ai_execution
+         (execution_id, task_type, provider_id, model, capability, started_at, completed_at,
+          latency_ms, attempt, fallback_step, status, validator_schema, validation_result_json,
+          error_code, error_message, input_hash, usage_json, cost_amount, candidate_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+        params![
+            record.execution_id,
+            record.task_type,
+            record.provider_id,
+            record.model,
+            record.capability,
+            record.started_at,
+            record.completed_at,
+            record.latency_ms,
+            i64::from(record.attempt),
+            i64::from(record.fallback_step),
+            record.status,
+            record.validator_schema,
+            serde_json::to_string(&record.validation_result)?,
+            record.error_code,
+            record.error_message,
+            record.input_hash,
+            record.usage.as_ref().map(serde_json::to_string).transpose()?,
+            record.cost,
+            record.candidate_id,
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_ai_candidate(
+    transaction: &Transaction<'_>,
+    record: &AiCandidateRecord,
+) -> Result<(), CoreError> {
+    transaction.execute(
+        "INSERT INTO ai_candidate
+         (candidate_id, proposal_kind, target_entity_type, target_entity_id, proposed_json,
+          evidence_json, provenance_json, rationale, confidence, execution_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            record.candidate_id,
+            record.proposal_kind,
+            record
+                .target
+                .as_ref()
+                .map(|target| target.entity_type.as_str()),
+            record
+                .target
+                .as_ref()
+                .map(|target| target.entity_id.as_str()),
+            serde_json::to_string(&record.proposed)?,
+            serde_json::to_string(&record.evidence)?,
+            serde_json::to_string(&record.provenance)?,
+            record.rationale,
+            record.confidence,
+            record.execution_id,
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_curator_proposal(
+    transaction: &Transaction<'_>,
+    record: &CuratorProposalRecord,
+) -> Result<(), CoreError> {
+    transaction.execute(
+        "INSERT INTO curator_proposal
+         (proposal_id, candidate_id, proposal_kind, proposed_json, evidence_json,
+          provenance_json, rationale, confidence)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            record.proposal_id,
+            record.candidate_id,
+            record.proposal_kind,
+            serde_json::to_string(&record.proposed)?,
+            serde_json::to_string(&record.evidence)?,
+            serde_json::to_string(&record.provenance)?,
+            record.rationale,
+            record.confidence,
+        ],
+    )?;
+    Ok(())
+}
+
+fn execution_read(record: &AiExecutionRecord) -> AiExecutionRead {
+    AiExecutionRead {
+        execution_id: record.execution_id.clone(),
+        task_type: record.task_type.clone(),
+        provider_id: record.provider_id.clone(),
+        model: record.model.clone(),
+        capability: record.capability.clone(),
+        started_at: record.started_at.clone(),
+        completed_at: record.completed_at.clone(),
+        latency_ms: record.latency_ms,
+        attempt: record.attempt,
+        fallback_step: record.fallback_step,
+        status: record.status.clone(),
+        validator_schema: record.validator_schema.clone(),
+        validation_result: record.validation_result.clone(),
+        error_code: record.error_code.clone(),
+        error_message: record.error_message.clone(),
+        input_hash: record.input_hash.clone(),
+        usage: record.usage.clone(),
+        cost: record.cost,
+        candidate_id: record.candidate_id.clone(),
+    }
+}
+
+fn candidate_read(record: &AiCandidateRecord) -> AiCandidateRead {
+    AiCandidateRead {
+        candidate_id: record.candidate_id.clone(),
+        proposal_kind: record.proposal_kind.clone(),
+        target: record.target.clone(),
+        proposed: record.proposed.clone(),
+        evidence: record.evidence.clone(),
+        provenance: record.provenance.clone(),
+        rationale: record.rationale.clone(),
+        confidence: record.confidence,
+        execution_id: record.execution_id.clone(),
+        status: "open".to_string(),
+    }
+}
+
+fn proposal_read(record: &CuratorProposalRecord) -> CuratorProposalRead {
+    CuratorProposalRead {
+        proposal_id: record.proposal_id.clone(),
+        candidate_id: record.candidate_id.clone(),
+        proposal_kind: record.proposal_kind.clone(),
+        state: "pending".to_string(),
+        target: record.target.clone(),
+        proposed: record.proposed.clone(),
+        edited: None,
+        before: None,
+        approved: None,
+        evidence: record.evidence.clone(),
+        provenance: record.provenance.clone(),
+        rationale: record.rationale.clone(),
+        confidence: record.confidence,
+        reviewer: None,
+        decision_reason: None,
+        decided_at: None,
+        official_applied: false,
+    }
+}
+
+fn json_value_from_row(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<Value> {
+    let text: String = row.get(index)?;
+    serde_json::from_str(&text).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            rusqlite::types::Type::Text,
+            Box::new(error),
+        )
+    })
+}
+
+fn optional_json_value_from_row(
+    row: &rusqlite::Row<'_>,
+    index: usize,
+) -> rusqlite::Result<Option<Value>> {
+    let text: Option<String> = row.get(index)?;
+    text.map(|value| {
+        serde_json::from_str(&value).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                index,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })
+    })
+    .transpose()
+}
+
+fn target_from_row(
+    row: &rusqlite::Row<'_>,
+    type_index: usize,
+    id_index: usize,
+) -> rusqlite::Result<Option<AiTargetRef>> {
+    let entity_type: Option<String> = row.get(type_index)?;
+    let entity_id: Option<String> = row.get(id_index)?;
+    Ok(entity_type
+        .zip(entity_id)
+        .map(|(entity_type, entity_id)| AiTargetRef {
+            entity_type,
+            entity_id,
+        }))
+}
+
+fn read_ai_execution_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AiExecutionRead> {
+    Ok(AiExecutionRead {
+        execution_id: row.get(0)?,
+        task_type: row.get(1)?,
+        provider_id: row.get(2)?,
+        model: row.get(3)?,
+        capability: row.get(4)?,
+        started_at: row.get(5)?,
+        completed_at: row.get(6)?,
+        latency_ms: row.get(7)?,
+        attempt: row.get::<_, i64>(8)? as u8,
+        fallback_step: row.get::<_, i64>(9)? as u8,
+        status: row.get(10)?,
+        validator_schema: row.get(11)?,
+        validation_result: json_value_from_row(row, 12)?,
+        error_code: row.get(13)?,
+        error_message: row.get(14)?,
+        input_hash: row.get(15)?,
+        usage: optional_json_value_from_row(row, 16)?,
+        cost: row.get(17)?,
+        candidate_id: row.get(18)?,
+    })
+}
+
+fn read_curator_proposal_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CuratorProposalRead> {
+    Ok(CuratorProposalRead {
+        proposal_id: row.get(0)?,
+        candidate_id: row.get(1)?,
+        proposal_kind: row.get(2)?,
+        state: row.get(3)?,
+        target: target_from_row(row, 4, 5)?,
+        proposed: json_value_from_row(row, 6)?,
+        edited: optional_json_value_from_row(row, 7)?,
+        before: optional_json_value_from_row(row, 8)?,
+        approved: optional_json_value_from_row(row, 9)?,
+        evidence: json_value_from_row(row, 10)?
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+        provenance: json_value_from_row(row, 11)?
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+        rationale: row.get(12)?,
+        confidence: row.get(13)?,
+        reviewer: row.get(14)?,
+        decision_reason: row.get(15)?,
+        decided_at: row.get(16)?,
+        official_applied: row.get::<_, i64>(17)? != 0,
+    })
+}
+
+fn apply_official_promotion(
+    transaction: &Transaction<'_>,
+    proposal_kind: &str,
+    target: &Option<AiTargetRef>,
+    proposed: &Value,
+) -> Result<(Option<Value>, bool), CoreError> {
+    match proposal_kind {
+        "review_summary" | "review_translation" => {
+            let target = target.as_ref().ok_or_else(|| {
+                CoreError::InvalidRequest("review proposal requires a target".to_string())
+            })?;
+            if target.entity_type != "review" {
+                return Ok((None, false));
+            }
+            let summary = proposed
+                .get("summary")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    CoreError::AiValidation("approved review lacks summary".to_string())
+                })?;
+            let key_points = proposed
+                .get("keyPoints")
+                .and_then(Value::as_array)
+                .ok_or_else(|| {
+                    CoreError::AiValidation("approved review lacks keyPoints".to_string())
+                })?;
+            let before = transaction
+                .query_row(
+                    "SELECT json_object('summary', summary, 'keyPoints', json(key_points_json))
+                     FROM catalog_review WHERE id=?1",
+                    [&target.entity_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?
+                .map(|value| serde_json::from_str(&value))
+                .transpose()?;
+            let changed = transaction.execute(
+                "UPDATE catalog_review
+                 SET summary=?1, key_points_json=?2, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                 WHERE id=?3",
+                params![summary, serde_json::to_string(key_points)?, target.entity_id],
+            )?;
+            if changed == 0 {
+                return Err(CoreError::NotFound {
+                    resource: "review".to_string(),
+                    id: target.entity_id.clone(),
+                });
+            }
+            Ok((before, true))
+        }
+        "source_discovery" | "source_candidate" => {
+            let source = proposed
+                .get("source")
+                .and_then(Value::as_object)
+                .ok_or_else(|| {
+                    CoreError::AiValidation("approved source proposal lacks source".to_string())
+                })?;
+            let id = source.get("id").and_then(Value::as_str).ok_or_else(|| {
+                CoreError::AiValidation("approved source proposal lacks source.id".to_string())
+            })?;
+            let name = source.get("name").and_then(Value::as_str).ok_or_else(|| {
+                CoreError::AiValidation("approved source proposal lacks source.name".to_string())
+            })?;
+            let source_kind = source
+                .get("sourceKind")
+                .and_then(Value::as_str)
+                .unwrap_or("discovered");
+            let authority_tier = source
+                .get("authorityTier")
+                .and_then(Value::as_str)
+                .unwrap_or("E");
+            let base_url = source
+                .get("baseUrl")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    CoreError::AiValidation(
+                        "approved source proposal lacks source.baseUrl".to_string(),
+                    )
+                })?;
+            let access_mode = source
+                .get("accessMode")
+                .and_then(Value::as_str)
+                .unwrap_or("remote_render");
+            transaction.execute(
+                "INSERT INTO source_registry
+                 (id, name, source_kind, authority_tier, base_url, access_mode, status, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active',
+                         strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                         strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                 ON CONFLICT(id) DO UPDATE SET name=excluded.name,
+                   source_kind=excluded.source_kind, authority_tier=excluded.authority_tier,
+                   base_url=excluded.base_url, access_mode=excluded.access_mode,
+                   status='active', updated_at=excluded.updated_at",
+                params![id, name, source_kind, authority_tier, base_url, access_mode],
+            )?;
+            Ok((None, true))
+        }
+        _ => Ok((None, false)),
+    }
+}
+
 fn delete_owned_rows(
     transaction: &Transaction<'_>,
     pack_id: &str,
@@ -2873,7 +3441,8 @@ mod tests {
                 "0002_fts5",
                 "0003_milano_vertical",
                 "0004_pack_runtime",
-                "0005_personal_favorite"
+                "0005_personal_favorite",
+                "0006_ai_curator"
             ]
         );
         assert!(database.has_fts5().unwrap());
