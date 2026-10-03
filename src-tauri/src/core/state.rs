@@ -7,9 +7,11 @@ pub struct CoreState {
 }
 
 impl CoreState {
-    pub fn new() -> Result<Self, CoreError> {
+    pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, CoreError> {
+        let mut database = CatalogDb::open(path)?;
+        database.seed_bundled_milano()?;
         Ok(Self {
-            database: Mutex::new(CatalogDb::in_memory()?),
+            database: Mutex::new(database),
         })
     }
 }

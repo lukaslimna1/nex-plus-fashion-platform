@@ -40,3 +40,41 @@ pub fn core_migrations(state: State<'_, CoreState>) -> Result<Vec<String>, CoreE
         .map_err(|_| CoreError::StatePoisoned)?;
     database.migration_names()
 }
+
+#[tauri::command]
+pub fn catalog_milano_ss27(
+    state: State<'_, CoreState>,
+) -> Result<crate::core::db::MilanoSnapshot, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.milano_snapshot()
+}
+
+#[tauri::command]
+pub fn catalog_search(
+    state: State<'_, CoreState>,
+    query: String,
+    limit: Option<u32>,
+) -> Result<Vec<crate::core::db::SearchRow>, CoreError> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.search(&query, limit.unwrap_or(50).min(200))
+}
+
+#[tauri::command]
+pub fn personal_note_upsert(
+    state: State<'_, CoreState>,
+    id: String,
+    entity_id: String,
+    body: String,
+) -> Result<crate::core::db::PersonalNoteRow, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    database.upsert_personal_note(&id, &entity_id, &body)
+}

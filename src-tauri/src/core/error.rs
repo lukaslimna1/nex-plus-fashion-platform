@@ -4,6 +4,10 @@ use serde::Serialize;
 pub enum CoreError {
     #[error("database error: {0}")]
     Database(#[from] rusqlite::Error),
+    #[error("serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+    #[error("local database path has no parent directory")]
+    InvalidDatabasePath,
     #[error("core state lock is poisoned")]
     StatePoisoned,
 }
