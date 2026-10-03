@@ -22,7 +22,11 @@ pub fn run() {
             core::commands::core_migrations,
             core::commands::catalog_milano_ss27,
             core::commands::catalog_search,
-            core::commands::personal_note_upsert
+            core::commands::personal_note_upsert,
+            core::commands::packs_list,
+            core::commands::pack_install,
+            core::commands::pack_remove,
+            core::commands::pack_repair
         ])
         .run(tauri::generate_context!())
         .expect("error while running NEX+ Fashion");

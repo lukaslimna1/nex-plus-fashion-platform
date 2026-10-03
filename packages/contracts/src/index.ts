@@ -1,6 +1,6 @@
 export const CORE_PROTOCOL_VERSION = "0.1" as const;
 
-export const BASELINE_MIGRATIONS = ["0001_core", "0002_fts5", "0003_milano_vertical"] as const;
+export const BASELINE_MIGRATIONS = ["0001_core", "0002_fts5", "0003_milano_vertical", "0004_pack_runtime"] as const;
 
 export const MILANO_SS27_PACK_ID = "nex.fashion.milano.ss27" as const;
 export const MILANO_SS27_EDITION_ID = "edition:milano-fashion-week:ss27:2026" as const;
@@ -10,6 +10,7 @@ export type EntityKind =
   | "event"
   | "edition"
   | "schedule_entry"
+  | "participant"
   | "venue"
   | "maison"
   | "person"
@@ -234,14 +235,73 @@ export interface PersonalNoteContract {
   updatedAt: string;
 }
 
+export type PackFamily = "base_catalog" | "collection" | "media" | "personal";
+
+export type PackState =
+  | "available"
+  | "staged"
+  | "verifying"
+  | "verified"
+  | "installing"
+  | "active"
+  | "removed"
+  | "error"
+  | "repair_required";
+
+export interface PackScope {
+  cityHubId: string;
+  eventId: string;
+  editionId: string;
+}
+
+export interface PackAppCompatibility {
+  minCoreProtocol: string;
+  minAppVersion: string;
+}
+
+export interface PackOrigin {
+  sourceIds: string[];
+  evidenceUrls: string[];
+  retrievedAt: string;
+}
+
+export interface PackIntegrity {
+  algorithm: "sha256";
+  payloadEncoding: "utf8-json";
+  payloadHash: string;
+}
+
 export interface PackManifest {
+  format: "nexpack";
+  formatVersion: number;
   packId: string;
   version: string;
-  kind: "base_catalog" | "collection" | "media" | "personal";
+  family: PackFamily;
   title: string;
+  scope: PackScope;
+  schemaVersion: string;
+  appCompatibility: PackAppCompatibility;
   contentHash: string;
-  sourceIds: string[];
+  sizeBytes: number;
+  origin: PackOrigin;
+  integrity: PackIntegrity;
   entityCounts: Partial<Record<EntityKind, number>>;
+}
+
+export interface PackSummary extends PackManifest {
+  artifactHash?: string;
+  state: PackState;
+  progress: number;
+  available: boolean;
+  updateAvailable: boolean;
+  lastError?: string;
+}
+
+export type PackOperation = "stage" | "verify" | "install" | "remove" | "repair";
+
+export interface PackOperationResult {
+  operation: PackOperation;
+  pack: PackSummary;
 }
 
 export interface MilanoVerticalSlice {
@@ -268,6 +328,7 @@ export function isEntityKind(value: unknown): value is EntityKind {
     "event",
     "edition",
     "schedule_entry",
+    "participant",
     "venue",
     "maison",
     "person",

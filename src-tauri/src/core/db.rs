@@ -1,15 +1,19 @@
 use crate::core::error::CoreError;
-use crate::core::milano::{bundled_seed, MilanoSeed};
+use crate::core::milano::{bundled_pack, MilanoSeed, NexPack};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
 use std::path::Path;
 
-const MIGRATIONS: [(&str, &str); 3] = [
+const MIGRATIONS: [(&str, &str); 4] = [
     ("0001_core", include_str!("../../migrations/0001_core.sql")),
     ("0002_fts5", include_str!("../../migrations/0002_fts5.sql")),
     (
         "0003_milano_vertical",
         include_str!("../../migrations/0003_milano_vertical.sql"),
+    ),
+    (
+        "0004_pack_runtime",
+        include_str!("../../migrations/0004_pack_runtime.sql"),
     ),
 ];
 
@@ -135,6 +139,25 @@ pub struct PersonalNoteRow {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct PackRuntimeRow {
+    pub pack_id: String,
+    pub version: String,
+    pub family: String,
+    pub scope_json: String,
+    pub schema_version: String,
+    pub app_compatibility_json: String,
+    pub manifest_json: String,
+    pub content_hash: String,
+    pub artifact_hash: Option<String>,
+    pub size_bytes: u64,
+    pub state: String,
+    pub progress: u8,
+    pub staged_path: Option<String>,
+    pub installed_path: Option<String>,
+    pub last_error: Option<String>,
+}
+
 pub struct CatalogDb {
     connection: Connection,
 }
@@ -195,14 +218,238 @@ impl CatalogDb {
         Ok(exists.is_some())
     }
 
+    pub fn ensure_pack_available(
+        &mut self,
+        pack: &NexPack,
+        artifact_size: u64,
+    ) -> Result<(), CoreError> {
+        let transaction = self.connection.transaction()?;
+        let manifest_json = serde_json::to_string(&pack.manifest)?;
+        let scope_json = serde_json::to_string(&pack.manifest.scope)?;
+        let compatibility_json = serde_json::to_string(&pack.manifest.app_compatibility)?;
+        let now = pack.manifest.origin.retrieved_at.as_str();
+        transaction.execute(
+            "INSERT INTO pack_runtime (pack_id, version, family, scope_json, schema_version, app_compatibility_json, manifest_json, content_hash, size_bytes, state, progress, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'available', 0, ?10, ?10)
+             ON CONFLICT(pack_id) DO UPDATE SET version=excluded.version, family=excluded.family,
+               scope_json=excluded.scope_json, schema_version=excluded.schema_version,
+               app_compatibility_json=excluded.app_compatibility_json, manifest_json=excluded.manifest_json,
+               content_hash=excluded.content_hash, size_bytes=excluded.size_bytes,
+               state=CASE WHEN pack_runtime.version <> excluded.version THEN 'available' ELSE pack_runtime.state END,
+               progress=CASE WHEN pack_runtime.version <> excluded.version THEN 0 ELSE pack_runtime.progress END,
+               last_error=CASE WHEN pack_runtime.version <> excluded.version THEN NULL ELSE pack_runtime.last_error END,
+               updated_at=excluded.updated_at",
+            params![
+                pack.manifest.pack_id,
+                pack.manifest.version,
+                pack.manifest.family,
+                scope_json,
+                pack.manifest.schema_version,
+                compatibility_json,
+                manifest_json,
+                pack.manifest.content_hash,
+                artifact_size,
+                now
+            ],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn pack_runtime_rows(&self) -> Result<Vec<PackRuntimeRow>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT pack_id, version, family, scope_json, schema_version, app_compatibility_json,
+                    manifest_json, content_hash, artifact_hash, size_bytes, state, progress,
+                    staged_path, installed_path, last_error
+             FROM pack_runtime ORDER BY pack_id",
+        )?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(PackRuntimeRow {
+                    pack_id: row.get(0)?,
+                    version: row.get(1)?,
+                    family: row.get(2)?,
+                    scope_json: row.get(3)?,
+                    schema_version: row.get(4)?,
+                    app_compatibility_json: row.get(5)?,
+                    manifest_json: row.get(6)?,
+                    content_hash: row.get(7)?,
+                    artifact_hash: row.get(8)?,
+                    size_bytes: row.get::<_, i64>(9)? as u64,
+                    state: row.get(10)?,
+                    progress: row.get::<_, i64>(11)? as u8,
+                    staged_path: row.get(12)?,
+                    installed_path: row.get(13)?,
+                    last_error: row.get(14)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>();
+        rows.map_err(CoreError::from)
+    }
+
+    pub fn pack_runtime_row(&self, pack_id: &str) -> Result<PackRuntimeRow, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT pack_id, version, family, scope_json, schema_version, app_compatibility_json,
+                        manifest_json, content_hash, artifact_hash, size_bytes, state, progress,
+                        staged_path, installed_path, last_error
+                 FROM pack_runtime WHERE pack_id = ?1",
+                [pack_id],
+                |row| {
+                    Ok(PackRuntimeRow {
+                        pack_id: row.get(0)?,
+                        version: row.get(1)?,
+                        family: row.get(2)?,
+                        scope_json: row.get(3)?,
+                        schema_version: row.get(4)?,
+                        app_compatibility_json: row.get(5)?,
+                        manifest_json: row.get(6)?,
+                        content_hash: row.get(7)?,
+                        artifact_hash: row.get(8)?,
+                        size_bytes: row.get::<_, i64>(9)? as u64,
+                        state: row.get(10)?,
+                        progress: row.get::<_, i64>(11)? as u8,
+                        staged_path: row.get(12)?,
+                        installed_path: row.get(13)?,
+                        last_error: row.get(14)?,
+                    })
+                },
+            )
+            .map_err(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => CoreError::PackNotFound(pack_id.to_string()),
+                other => CoreError::Database(other),
+            })
+    }
+
+    pub fn set_pack_runtime_state(
+        &mut self,
+        pack_id: &str,
+        version: &str,
+        state: &str,
+        progress: u8,
+        staged_path: Option<&str>,
+        installed_path: Option<&str>,
+        artifact_hash: Option<&str>,
+        size_bytes: Option<u64>,
+        last_error: Option<&str>,
+    ) -> Result<(), CoreError> {
+        let changed = self.connection.execute(
+            "UPDATE pack_runtime SET version=?2, state=?3, progress=?4, staged_path=COALESCE(?5, staged_path),
+                    installed_path=COALESCE(?6, installed_path), artifact_hash=COALESCE(?7, artifact_hash),
+                    size_bytes=COALESCE(?8, size_bytes), last_error=?9,
+                    updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE pack_id=?1",
+            params![
+                pack_id,
+                version,
+                state,
+                i64::from(progress),
+                staged_path,
+                installed_path,
+                artifact_hash,
+                size_bytes.map(|value| value as i64),
+                last_error
+            ],
+        )?;
+        if changed == 0 {
+            return Err(CoreError::PackNotFound(pack_id.to_string()));
+        }
+        Ok(())
+    }
+
+    pub fn import_milano_pack(&mut self, pack: &NexPack) -> Result<usize, CoreError> {
+        pack.verify()?;
+        let imported = self.seed_milano(&pack.payload)?;
+        self.connection.execute(
+            "UPDATE pack_installation SET manifest_json=?3, content_hash=?4
+             WHERE pack_id=?1 AND pack_version=?2",
+            params![
+                pack.manifest.pack_id,
+                pack.manifest.version,
+                serde_json::to_string(&pack.manifest)?,
+                pack.manifest.content_hash
+            ],
+        )?;
+        Ok(imported)
+    }
+
+    pub fn pack_entity_count(&self, pack_id: &str, entity_kind: &str) -> Result<u64, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT COUNT(*) FROM pack_membership WHERE pack_id=?1 AND entity_kind=?2",
+                params![pack_id, entity_kind],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|count| count as u64)
+            .map_err(CoreError::from)
+    }
+
+    pub fn remove_pack(&mut self, pack_id: &str) -> Result<(), CoreError> {
+        let transaction = self.connection.transaction()?;
+        transaction
+            .execute(
+                "DELETE FROM event_segment
+                 WHERE event_id IN (SELECT entity_id FROM pack_membership WHERE pack_id=?1 AND entity_kind='event')
+                   AND segment_id IN (SELECT entity_id FROM pack_membership WHERE pack_id=?1 AND entity_kind='segment')",
+                [pack_id],
+            )
+            .map_err(|error| CoreError::Pack(format!("delete event_segment: {error}")))?;
+        for (table, kind) in [
+            ("source_contribution", "source_contribution"),
+            ("media_occurrence", "media_occurrence"),
+            ("catalog_review", "catalog_review"),
+            ("person_role", "person_role"),
+            ("catalog_collection", "catalog_collection"),
+            ("schedule_entry", "schedule_entry"),
+            ("participant_registry", "participant"),
+            ("catalog_maison", "maison"),
+            ("catalog_venue", "venue"),
+            ("catalog_edition", "edition"),
+            ("catalog_segment", "segment"),
+            ("catalog_event", "event"),
+            ("city_hub", "city_hub"),
+            ("geo_city", "geo_city"),
+            ("geo_country", "geo_country"),
+            ("geo_region", "geo_region"),
+            ("source_endpoint", "source_endpoint"),
+        ] {
+            delete_owned_rows(&transaction, pack_id, table, kind)?;
+        }
+        delete_owned_rows(&transaction, pack_id, "catalog_gap", "catalog_gap")?;
+        delete_owned_rows(&transaction, pack_id, "source_registry", "source")?;
+        transaction.execute(
+            "UPDATE catalog_entity SET display_name='Removed pack content', search_text='', payload_json='{\"packRemoved\":true}',
+                    is_official=0, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id IN (SELECT entity_id FROM pack_membership WHERE pack_id=?1 AND entity_kind='catalog_entity')
+               AND EXISTS (SELECT 1 FROM personal_note WHERE personal_note.entity_id = catalog_entity.id)
+               AND NOT EXISTS (SELECT 1 FROM pack_membership other WHERE other.entity_kind='catalog_entity'
+                               AND other.entity_id=catalog_entity.id AND other.pack_id<>?1)",
+            [pack_id],
+        )?;
+        transaction.execute(
+            "DELETE FROM catalog_entity
+             WHERE id IN (SELECT entity_id FROM pack_membership WHERE pack_id=?1 AND entity_kind='catalog_entity')
+               AND NOT EXISTS (SELECT 1 FROM personal_note WHERE personal_note.entity_id = catalog_entity.id)
+               AND NOT EXISTS (SELECT 1 FROM pack_membership other WHERE other.entity_kind='catalog_entity'
+                               AND other.entity_id=catalog_entity.id AND other.pack_id<>?1)",
+            [pack_id],
+        )?;
+        transaction.execute("DELETE FROM pack_installation WHERE pack_id=?1", [pack_id])?;
+        transaction.execute("DELETE FROM pack_membership WHERE pack_id=?1", [pack_id])?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn seed_bundled_milano(&mut self) -> Result<usize, CoreError> {
-        let seed = bundled_seed()?;
-        self.seed_milano(&seed)
+        let pack = bundled_pack()?;
+        self.seed_milano(&pack.payload)
     }
 
     pub fn seed_milano(&mut self, seed: &MilanoSeed) -> Result<usize, CoreError> {
         let transaction = self.connection.transaction()?;
         let now = seed.retrieved_at.as_str();
+        let pack_id = seed.pack_id.as_str();
+        let pack_version = seed.version.as_str();
         let source = &seed.source;
         let capabilities = serde_json::to_string(&source.endpoint.capabilities)?;
 
@@ -223,6 +470,14 @@ impl CatalogDb {
                 now
             ],
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "source",
+            &source.id,
+            now,
+        )?;
         transaction.execute(
             "INSERT INTO source_endpoint (id, source_id, endpoint_type, base_url, access_method, capabilities_json, adapter_id, status, last_verified_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8)
@@ -239,12 +494,28 @@ impl CatalogDb {
                 now
             ],
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "source_endpoint",
+            &source.endpoint.id,
+            now,
+        )?;
 
         transaction.execute(
             "INSERT INTO geo_region (id, name, m49_code, source_id, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?5)
              ON CONFLICT(id) DO UPDATE SET name=excluded.name, m49_code=excluded.m49_code, source_id=excluded.source_id, updated_at=excluded.updated_at",
             params![seed.region.id, seed.region.name, seed.region.m49_code, source.id, now],
+        )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "geo_region",
+            &seed.region.id,
+            now,
         )?;
         transaction.execute(
             "INSERT INTO geo_country (id, region_id, name, iso_alpha2, iso_alpha3, m49_code, source_id, created_at, updated_at)
@@ -263,6 +534,14 @@ impl CatalogDb {
                 now
             ],
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "geo_country",
+            &seed.country.id,
+            now,
+        )?;
         transaction.execute(
             "INSERT INTO geo_city (id, country_id, name, aliases_json, source_id, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
@@ -276,6 +555,14 @@ impl CatalogDb {
                 source.id,
                 now
             ],
+        )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "geo_city",
+            &seed.city.id,
+            now,
         )?;
         transaction.execute(
             "INSERT INTO city_hub (id, city_id, official_name, display_name, slug, hub_type, status, source_id, created_at, updated_at)
@@ -294,6 +581,14 @@ impl CatalogDb {
                 source.id,
                 now
             ],
+        )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "city_hub",
+            &seed.city_hub.id,
+            now,
         )?;
         transaction.execute(
             "INSERT INTO catalog_event (id, city_hub_id, official_name, display_name, short_name, event_type, status, start_year, official_website, source_id, created_at, updated_at)
@@ -316,11 +611,27 @@ impl CatalogDb {
                 now
             ],
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "event",
+            &seed.event.id,
+            now,
+        )?;
         transaction.execute(
             "INSERT INTO catalog_segment (id, name, code, description, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?5)
              ON CONFLICT(id) DO UPDATE SET name=excluded.name, code=excluded.code, description=excluded.description, updated_at=excluded.updated_at",
             params![seed.segment.id, seed.segment.name, seed.segment.code, seed.segment.description, now],
+        )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "segment",
+            &seed.segment.id,
+            now,
         )?;
         transaction.execute(
             "INSERT OR REPLACE INTO event_segment (event_id, segment_id, source_id) VALUES (?1, ?2, ?3)",
@@ -354,6 +665,14 @@ impl CatalogDb {
                 now
             ],
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "edition",
+            &seed.edition.id,
+            now,
+        )?;
 
         for venue in &seed.venues {
             transaction.execute(
@@ -378,6 +697,15 @@ impl CatalogDb {
                 venue.address.as_deref().unwrap_or("Milano venue"),
                 venue.address.as_deref().unwrap_or(""),
                 "{}",
+                now,
+            )?;
+            register_pack_entity(&transaction, pack_id, pack_version, "venue", &venue.id, now)?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "catalog_entity",
+                &venue.id,
                 now,
             )?;
         }
@@ -409,6 +737,22 @@ impl CatalogDb {
                 &serde_json::to_string(maison)?,
                 now,
             )?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "maison",
+                &maison.id,
+                now,
+            )?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "catalog_entity",
+                &maison.id,
+                now,
+            )?;
         }
 
         for participant in &seed.participants {
@@ -428,6 +772,14 @@ impl CatalogDb {
                     source.id,
                     now
                 ],
+            )?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "participant",
+                &participant.id,
+                now,
             )?;
         }
 
@@ -481,6 +833,22 @@ impl CatalogDb {
                 &serde_json::to_string(entry)?,
                 now,
             )?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "schedule_entry",
+                &entry.id,
+                now,
+            )?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "catalog_entity",
+                &entry.id,
+                now,
+            )?;
             insert_contribution(
                 &transaction,
                 &format!("contribution:{}", entry.id),
@@ -495,6 +863,14 @@ impl CatalogDb {
                 now,
                 &source.endpoint.adapter_id,
             )?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "source_contribution",
+                &format!("contribution:{}", entry.id),
+                now,
+            )?;
         }
 
         upsert_catalog_entity(
@@ -506,6 +882,14 @@ impl CatalogDb {
             &serde_json::to_string(&seed.city_hub)?,
             now,
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "catalog_entity",
+            &seed.city_hub.id,
+            now,
+        )?;
         upsert_catalog_entity(
             &transaction,
             &seed.event.id,
@@ -513,6 +897,14 @@ impl CatalogDb {
             &seed.event.display_name,
             &format!("{} {}", seed.event.display_name, seed.event.short_name),
             &serde_json::to_string(&seed.event)?,
+            now,
+        )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "catalog_entity",
+            &seed.event.id,
             now,
         )?;
         upsert_catalog_entity(
@@ -527,6 +919,14 @@ impl CatalogDb {
             &serde_json::to_string(&seed.edition)?,
             now,
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "catalog_entity",
+            &seed.edition.id,
+            now,
+        )?;
         upsert_catalog_entity(
             &transaction,
             &source.id,
@@ -534,6 +934,14 @@ impl CatalogDb {
             &source.name,
             &format!("{} {}", source.name, source.endpoint.base_url),
             &serde_json::to_string(source)?,
+            now,
+        )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "catalog_entity",
+            &source.id,
             now,
         )?;
 
@@ -548,6 +956,14 @@ impl CatalogDb {
             now,
             &source.endpoint.adapter_id,
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "source_contribution",
+            "contribution:cityhub:milano",
+            now,
+        )?;
         insert_contribution(
             &transaction,
             "contribution:event:milano-fashion-week",
@@ -559,6 +975,14 @@ impl CatalogDb {
             now,
             &source.endpoint.adapter_id,
         )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "source_contribution",
+            "contribution:event:milano-fashion-week",
+            now,
+        )?;
         insert_contribution(
             &transaction,
             "contribution:edition:milano-fashion-week:ss27:2026",
@@ -569,6 +993,14 @@ impl CatalogDb {
             &seed.edition.official_calendar_url,
             now,
             &source.endpoint.adapter_id,
+        )?;
+        register_pack_entity(
+            &transaction,
+            pack_id,
+            pack_version,
+            "source_contribution",
+            "contribution:edition:milano-fashion-week:ss27:2026",
+            now,
         )?;
 
         for maison in &seed.maisons {
@@ -586,6 +1018,14 @@ impl CatalogDb {
                 now,
                 &source.endpoint.adapter_id,
             )?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "source_contribution",
+                &format!("contribution:{}", maison.id),
+                now,
+            )?;
         }
 
         for gap in &seed.gaps {
@@ -602,6 +1042,14 @@ impl CatalogDb {
                     source.id,
                     now
                 ],
+            )?;
+            register_pack_entity(
+                &transaction,
+                pack_id,
+                pack_version,
+                "catalog_gap",
+                &gap.id,
+                now,
             )?;
         }
 
@@ -782,6 +1230,58 @@ impl CatalogDb {
             |row| Ok(PersonalNoteRow { id: row.get(0)?, entity_id: row.get(1)?, body: row.get(2)?, created_at: row.get(3)?, updated_at: row.get(4)? }),
         ).map_err(CoreError::from)
     }
+
+    pub fn personal_note(&self, id: &str) -> Result<PersonalNoteRow, CoreError> {
+        self.connection
+            .query_row(
+                "SELECT id, entity_id, body, created_at, updated_at FROM personal_note WHERE id = ?1",
+                [id],
+                |row| {
+                    Ok(PersonalNoteRow {
+                        id: row.get(0)?,
+                        entity_id: row.get(1)?,
+                        body: row.get(2)?,
+                        created_at: row.get(3)?,
+                        updated_at: row.get(4)?,
+                    })
+                },
+            )
+            .map_err(CoreError::from)
+    }
+}
+
+fn register_pack_entity(
+    transaction: &Transaction<'_>,
+    pack_id: &str,
+    pack_version: &str,
+    entity_kind: &str,
+    entity_id: &str,
+    created_at: &str,
+) -> Result<(), CoreError> {
+    transaction.execute(
+        "INSERT OR IGNORE INTO pack_membership (pack_id, pack_version, entity_kind, entity_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![pack_id, pack_version, entity_kind, entity_id, created_at],
+    )?;
+    Ok(())
+}
+
+fn delete_owned_rows(
+    transaction: &Transaction<'_>,
+    pack_id: &str,
+    table: &str,
+    entity_kind: &str,
+) -> Result<(), CoreError> {
+    let sql = format!(
+        "DELETE FROM {table}
+         WHERE id IN (SELECT entity_id FROM pack_membership WHERE pack_id=?1 AND entity_kind=?2)
+           AND NOT EXISTS (SELECT 1 FROM pack_membership other
+                           WHERE other.entity_kind=?2 AND other.entity_id={table}.id AND other.pack_id<>?1)"
+    );
+    transaction
+        .execute(&sql, params![pack_id, entity_kind])
+        .map_err(|error| CoreError::Pack(format!("delete {table}: {error}")))?;
+    Ok(())
 }
 
 fn normalize_participant_name(value: &str) -> String {
@@ -844,7 +1344,12 @@ mod tests {
         let database = CatalogDb::in_memory().expect("baseline database should initialize");
         assert_eq!(
             database.migration_names().unwrap(),
-            vec!["0001_core", "0002_fts5", "0003_milano_vertical"]
+            vec![
+                "0001_core",
+                "0002_fts5",
+                "0003_milano_vertical",
+                "0004_pack_runtime"
+            ]
         );
         assert!(database.has_fts5().unwrap());
     }

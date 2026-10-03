@@ -13,6 +13,7 @@
     "test": "npm run build:contracts && npm run test --workspace @nex-plus/contracts",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "data:milano:import": "node scripts/import-milano-calendar.mjs",
+    "pack:milano:build": "node scripts/build-milano-pack.mjs",
     "tauri:dev": "tauri dev --config src-tauri/tauri.conf.json",
     "tauri:build": "tauri build --config src-tauri/tauri.conf.json"
   },

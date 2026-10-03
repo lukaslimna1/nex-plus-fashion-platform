@@ -78,3 +78,50 @@ pub fn personal_note_upsert(
         .map_err(|_| CoreError::StatePoisoned)?;
     database.upsert_personal_note(&id, &entity_id, &body)
 }
+
+#[tauri::command]
+pub fn packs_list(
+    state: State<'_, CoreState>,
+) -> Result<Vec<crate::core::pack::PackSummary>, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    state.packs.list(&mut database)
+}
+
+#[tauri::command]
+pub fn pack_install(
+    state: State<'_, CoreState>,
+    pack_id: String,
+) -> Result<crate::core::pack::PackOperationResult, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    state.packs.install(&mut database, &pack_id)
+}
+
+#[tauri::command]
+pub fn pack_remove(
+    state: State<'_, CoreState>,
+    pack_id: String,
+) -> Result<crate::core::pack::PackOperationResult, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    state.packs.remove(&mut database, &pack_id)
+}
+
+#[tauri::command]
+pub fn pack_repair(
+    state: State<'_, CoreState>,
+    pack_id: String,
+) -> Result<crate::core::pack::PackOperationResult, CoreError> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| CoreError::StatePoisoned)?;
+    state.packs.repair(&mut database, &pack_id)
+}
